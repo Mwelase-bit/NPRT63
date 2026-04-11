@@ -75,6 +75,21 @@ const App = () => {
         };
     }, [timer.isActive, timer.isPaused]);
 
+    // Request notification permission after login/registration
+    useEffect(() => {
+        if (gameState.token && window.NotificationManager) {
+            window.NotificationManager.requestPermission();
+            // Start streak reminder scheduler
+            window.NotificationManager.startStreakReminder(
+                () => rewards.lastFocusDate,
+                () => rewards.streak
+            );
+        }
+        return () => {
+            if (window.NotificationManager) window.NotificationManager.stopStreakReminder();
+        };
+    }, [gameState.token]);
+
     // Force building to start when timer becomes active
     useEffect(() => {
         if (timer.isActive && !gameState.isBuilding) {
@@ -99,6 +114,13 @@ const App = () => {
 
             if (gameState.buildStage !== nextStage) {
                 gameState.updateBuildStage(nextStage);
+                // 🔊 Sound: build stage advanced
+                if (window.SoundManager) window.SoundManager.buildStageUp();
+            }
+
+            // 🔊 Tick sound for last 10 seconds
+            if (timer.timeLeft <= 10 && timer.timeLeft > 0) {
+                if (window.SoundManager) window.SoundManager.tick();
             }
         }
     }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState]);
@@ -110,13 +132,28 @@ const App = () => {
             rewards.awardCoins(timer.duration);
             rewards.updateStreak();
 
+            // 🔊 Sound: session complete + building done
+            if (window.SoundManager) {
+                window.SoundManager.sessionComplete();
+                setTimeout(() => window.SoundManager.coinEarned(), 600);
+            }
+            // 📱 Notification: session complete
+            if (window.NotificationManager) {
+                window.NotificationManager.sessionComplete(timer.duration);
+            }
+
             // Sync completed session to backend
             syncSessionToBackend(timer.duration, timer.duration, true);
 
             // Sync new achievements unlocked from this session
             rewards.allAchievements
                 .filter(a => a.unlocked && a.unlockedAt && (Date.now() - a.unlockedAt) < 10000)
-                .forEach(a => window.api.achievements.unlock(a.id).catch(() => { }));
+                .forEach(a => {
+                    window.api.achievements.unlock(a.id).catch(() => { });
+                    // 🔊 + 📱 Achievement notification
+                    if (window.SoundManager) window.SoundManager.achievementUnlocked();
+                    if (window.NotificationManager) window.NotificationManager.achievementUnlocked(a.title || a.name);
+                });
 
             setInterruptionDetected(false);
             sessionStartRef.current = null;
@@ -126,6 +163,11 @@ const App = () => {
     // Handle interruption effects
     useEffect(() => {
         if (interruptionDetected) {
+            // 🔊 Sound: demolish
+            if (window.SoundManager) window.SoundManager.demolish();
+            // 📱 Notification: interrupted
+            if (window.NotificationManager) window.NotificationManager.sessionInterrupted();
+
             // Sync interrupted session to backend
             const elapsed = sessionStartRef.current
                 ? Math.floor((Date.now() - sessionStartRef.current) / 1000)
@@ -156,6 +198,9 @@ const App = () => {
 
         // Start building
         gameState.startBuilding();
+
+        // 🔊 Sound: session started
+        if (window.SoundManager) window.SoundManager.sessionStart();
 
         setInterruptionDetected(false);
     };
