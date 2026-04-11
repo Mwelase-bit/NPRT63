@@ -1,3 +1,4 @@
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const TimerPanel = ({ timer, onStartSession, gameState }) => {
     const [selectedMinutes, setSelectedMinutes] = useState(25); // Default 25 minutes
     
@@ -39,23 +40,11 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
                     </div>
                     
                     <div className="house-preview">
-                        <h4>Building Progress:</h4>
+                        <h4>Current Project:</h4>
                         <div className="build-stages">
-                            <div className={`stage ${gameState.buildStage >= 1 ? 'completed' : 'pending'}`}>
-                                <i data-feather="square"></i>
-                                Foundation
-                            </div>
-                            <div className={`stage ${gameState.buildStage >= 2 ? 'completed' : 'pending'}`}>
+                            <div className="stage">
                                 <i data-feather="home"></i>
-                                Walls
-                            </div>
-                            <div className={`stage ${gameState.buildStage >= 3 ? 'completed' : 'pending'}`}>
-                                <i data-feather="triangle"></i>
-                                Roof
-                            </div>
-                            <div className={`stage ${gameState.buildStage >= 4 ? 'completed' : 'pending'}`}>
-                                <i data-feather="star"></i>
-                                Finishing
+                                Ready to build: {gameState.currentHouse}
                             </div>
                         </div>
                     </div>

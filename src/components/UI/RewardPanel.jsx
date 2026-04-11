@@ -3,6 +3,34 @@ const RewardPanel = ({ rewards }) => {
         <div className="reward-panel">
             <h2>Your Rewards</h2>
             
+            {/* Daily Login Bonus */}
+            {!rewards.dailyStats.dailyLoginClaimed && (
+                <div className="daily-login-banner" style={{
+                    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+                    border: '1px solid #FFD700',
+                    borderRadius: '8px',
+                    padding: '15px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                }}>
+                    <div className="login-bonus-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <i data-feather="gift" style={{ color: '#FFD700' }}></i>
+                        <div>
+                            <h4 style={{ margin: 0, color: '#FFD700' }}>Daily Check-In Bonus</h4>
+                            <p style={{ margin: 0, fontSize: '0.9em', opacity: 0.9 }}>Thanks for focusing today! Here's 50 coins.</p>
+                        </div>
+                    </div>
+                    <button 
+                        className="btn btn-warning"
+                        onClick={() => rewards.claimDailyLogin()}
+                    >
+                        Claim 50 Coins
+                    </button>
+                </div>
+            )}
+            
             {/* Current Stats */}
             <div className="stats-grid">
                 <div className="stat-card">
@@ -76,24 +104,30 @@ const RewardPanel = ({ rewards }) => {
             <div className="streak-bonuses">
                 <h3>Streak Bonuses</h3>
                 <div className="bonus-track">
-                    {[3, 7, 14, 30, 100].map((milestone) => (
+                    {[
+                        { days: 3, reward: "30 coins" },
+                        { days: 7, reward: "70 coins" },
+                        { days: 14, reward: "140 coins" },
+                        { days: 20, reward: "1GB Data" },
+                        { days: 50, reward: "5GB Data" }
+                    ].map((milestone) => (
                         <div 
-                            key={milestone}
-                            className={`bonus-milestone ${rewards.streak >= milestone ? 'achieved' : 'pending'}`}
+                            key={milestone.days}
+                            className={`bonus-milestone ${rewards.streak >= milestone.days ? 'achieved' : 'pending'}`}
                         >
-                            <div className="milestone-number">{milestone}</div>
+                            <div className="milestone-number">{milestone.days}</div>
                             <div className="milestone-reward">
                                 <i data-feather="gift"></i>
-                                +{milestone * 10} coins
+                                {milestone.reward}
                             </div>
                         </div>
                     ))}
                 </div>
                 <p className="next-milestone">
-                    {rewards.streak < 100 && (
+                    {rewards.streak < 50 && (
                         <>
                             Next milestone in {
-                                [3, 7, 14, 30, 100].find(m => m > rewards.streak) - rewards.streak
+                                [3, 7, 14, 20, 50].find(m => m > rewards.streak) - rewards.streak
                             } days!
                         </>
                     )}
@@ -119,10 +153,27 @@ const RewardPanel = ({ rewards }) => {
                         <div className="progress-bar">
                             <div 
                                 className="progress-fill"
-                                style={{ width: `${(rewards.dailyStats.timeToday / 7200) * 100}%` }}
+                                style={{ width: `${Math.min((rewards.dailyStats.timeToday / 7200) * 100, 100)}%` }}
                             ></div>
                         </div>
                     </div>
+                </div>
+                
+                {/* Daily Progress Claim Button */}
+                <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                    {rewards.dailyStats.dailyProgressClaimed ? (
+                        <button className="btn btn-secondary" disabled>
+                            <i data-feather="check"></i> Claimed (200 Coins)
+                        </button>
+                    ) : (rewards.dailyStats.sessionsToday >= 5 || rewards.dailyStats.timeToday >= 7200) ? (
+                        <button className="btn btn-success" onClick={() => rewards.claimDailyProgress()}>
+                            <i data-feather="gift"></i> Claim Daily Reward (200 Coins)
+                        </button>
+                    ) : (
+                        <button className="btn btn-outline-secondary" disabled>
+                            Complete 5 Sessions or 120min to Claim
+                        </button>
+                    )}
                 </div>
             </div>
             
@@ -140,14 +191,30 @@ const RewardPanel = ({ rewards }) => {
                             <div className="progress-bar">
                                 <div 
                                     className="progress-fill"
-                                    style={{ width: `${(rewards.weeklyStats.sessionsThisWeek / 20) * 100}%` }}
+                                    style={{ width: `${Math.min((rewards.weeklyStats.sessionsThisWeek / 20) * 100, 100)}%` }}
                                 ></div>
                             </div>
                             <span>{rewards.weeklyStats.sessionsThisWeek}/20</span>
                         </div>
-                        <div className="challenge-reward">
-                            <i data-feather="award"></i>
-                            Reward: 500 coins + Special Badge
+                        <div className="challenge-reward" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                            <div>
+                                <i data-feather="award"></i>
+                                Reward: 500 coins + Special Badge
+                            </div>
+                            
+                            {rewards.weeklyStats.weeklyChallengeClaimed ? (
+                                <button className="btn btn-sm btn-secondary" disabled>
+                                    Claimed
+                                </button>
+                            ) : rewards.weeklyStats.sessionsThisWeek >= 20 ? (
+                                <button className="btn btn-sm btn-success" onClick={() => rewards.claimWeeklyChallenge()}>
+                                    Claim 500 Coins
+                                </button>
+                            ) : (
+                                <button className="btn btn-sm btn-outline-secondary" disabled>
+                                    In Progress
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

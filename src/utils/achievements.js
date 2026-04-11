@@ -105,25 +105,26 @@ const ACHIEVEMENTS = [
         progress: { type: 'streak', target: 7 }
     },
     {
-        id: 'month_master',
-        name: 'Month Master',
-        description: 'Maintain a 30-day focus streak',
+        id: 'data_master',
+        name: 'Data Master',
+        description: 'Maintain a 20-day focus streak',
         icon: 'trending-up',
         category: 'streak',
         rarity: 'epic',
         coinReward: 1000,
-        progress: { type: 'streak', target: 30 }
+        specialReward: '1GB Data',
+        progress: { type: 'streak', target: 20 }
     },
     {
-        id: 'century_streak',
-        name: 'Century Streak',
-        description: 'Maintain a 100-day focus streak',
+        id: 'data_champion',
+        name: 'Data Champion',
+        description: 'Maintain a 50-day focus streak',
         icon: 'star',
         category: 'streak',
         rarity: 'legendary',
         coinReward: 5000,
-        specialReward: 'Golden Builder Crown',
-        progress: { type: 'streak', target: 100 }
+        specialReward: '5GB Data + Golden Builder Crown',
+        progress: { type: 'streak', target: 50 }
     },
     
     // Milestone Achievements

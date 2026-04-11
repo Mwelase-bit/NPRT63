@@ -1,3 +1,4 @@
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const AchievementPanel = ({ rewards }) => {
     const [selectedCategory, setSelectedCategory] = useState('all');
     

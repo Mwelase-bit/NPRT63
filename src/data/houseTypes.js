@@ -170,8 +170,8 @@ const HOUSE_TYPES = {
     },
     
     castle: {
-        name: 'Medieval Castle',
-        description: 'A fortress of focus and determination',
+        name: 'Grand Castle Estate',
+        description: 'A magnificent castle with elegant estate grounds',
         difficulty: 'expert',
         buildTime: 3 * 60 * 60, // 3 hours
         coinReward: 200,
@@ -198,96 +198,96 @@ const HOUSE_TYPES = {
         },
         stages: [
             {
-                name: 'Castle Grounds',
-                description: 'Vast castle grounds prepared',
+                name: 'Estate Grounds',
+                description: 'Beautiful estate grounds with hedge fences prepared',
                 progress: 0
             },
             {
-                name: 'Moat & Foundations',
-                description: 'Defensive moat and stone foundations',
+                name: 'Castle Foundation',
+                description: 'Massive stone foundation and estate pathways',
                 progress: 20
             },
             {
                 name: 'Outer Walls & Gates',
-                description: 'Massive stone walls and entrance gates',
+                description: 'Defensive walls and elegant gatehouse entrance',
                 progress: 45
             },
             {
                 name: 'Towers & Keep',
-                description: 'Defensive towers and central keep',
+                description: 'Corner towers and central keep with bird fountain',
                 progress: 75
             },
             {
-                name: 'Royal Quarters',
-                description: 'Throne room, chambers, and battlements',
+                name: 'Estate Finishing',
+                description: 'Garden beds, benches, and castle flags raised',
                 progress: 100
             }
         ],
-        features: ['moat', 'drawbridge', 'towers', 'throne_room', 'dungeon', 'armory']
+        features: ['hedge_fence', 'bird_fountain', 'garden_beds', 'stone_pathways', 'decorative_benches', 'castle_flags']
     },
     
-    skyscraper: {
-        name: 'Modern Skyscraper',
-        description: 'Reach for the sky with ultimate focus',
+    estate: {
+        name: 'Luxury Estate',
+        description: 'An elegant estate with mansion and beautiful grounds',
         difficulty: 'legendary',
         buildTime: 4 * 60 * 60, // 4 hours
         coinReward: 500,
         unlockLevel: 100,
         foundation: {
-            width: 3,
-            depth: 3
+            width: 10,
+            depth: 10
         },
         walls: {
-            width: 3,
-            height: 12, // Very tall
-            depth: 3
+            width: 10,
+            height: 5,
+            depth: 10
         },
         roof: {
-            width: 3.5,
-            depth: 3.5,
-            angle: 0
+            width: 11,
+            depth: 11,
+            angle: 0.1
         },
         colors: {
-            walls: '#C0C0C0',
-            roof: '#2F4F4F',
-            door: '#000080',
+            walls: '#F5F5DC',
+            roof: '#8B4513',
+            door: '#654321',
             foundation: '#2F4F4F'
         },
         stages: [
             {
-                name: 'Urban Planning',
-                description: 'City permits and site preparation',
+                name: 'Estate Planning',
+                description: 'Grand estate grounds surveyed and planned',
                 progress: 0
             },
             {
-                name: 'Deep Foundation',
-                description: 'Steel and concrete deep foundation system',
-                progress: 10
+                name: 'Foundation & Landscaping',
+                description: 'Estate foundation with hedge maze and gardens',
+                progress: 15
             },
             {
-                name: 'Steel Framework',
-                description: 'Structural steel frame to 20 floors',
-                progress: 35
+                name: 'Mansion Structure',
+                description: 'Main mansion building with multiple wings',
+                progress: 40
             },
             {
-                name: 'Floors & Systems',
-                description: 'All floors, elevators, and building systems',
+                name: 'Estate Features',
+                description: 'Fountains, gazebos, and decorative elements',
                 progress: 70
             },
             {
-                name: 'Glass & Finishing',
-                description: 'Glass curtain wall and luxury finishing',
+                name: 'Luxury Finishing',
+                description: 'Final estate touches and royal gardens',
                 progress: 100
             }
         ],
-        features: ['helipad', 'observation_deck', 'sky_lobby', 'penthouse', 'parking_garage']
+        features: ['hedge_maze', 'multiple_fountains', 'gazebos', 'rose_gardens', 'tennis_court', 'swimming_pool']
     }
 };
 
 // House progression system
 const HouseProgression = {
     getHouseForLevel: (housesBuilt) => {
-        if (housesBuilt >= 100) return 'skyscraper';
+        if (housesBuilt >= 100) return 'estate';
         if (housesBuilt >= 50) return 'castle';
         if (housesBuilt >= 25) return 'mansion';
         if (housesBuilt >= 10) return 'townhouse';
@@ -295,9 +295,9 @@ const HouseProgression = {
     },
     
     getNextHouse: (currentHouse) => {
-        const progression = ['cottage', 'townhouse', 'mansion', 'castle', 'skyscraper'];
+        const progression = ['cottage', 'townhouse', 'mansion', 'castle', 'estate'];
         const currentIndex = progression.indexOf(currentHouse);
-        return progression[currentIndex + 1] || 'skyscraper';
+        return progression[currentIndex + 1] || 'estate';
     },
     
     getHouseVariant: (houseType, variant = 'default') => {

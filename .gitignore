@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# SQLite database files
+*.db
+*.db-wal
+*.db-shm
+
+# Environment variables
+.env
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Replit / misc
+.replit
+.local/
+.qodo/
+.cache/
+replit.nix
+
+# Temp / build
+tmp/
+dist/
+prettier_err.txt

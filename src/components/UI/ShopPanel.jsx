@@ -1,157 +1,103 @@
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const ShopPanel = ({ gameState, rewards }) => {
-    const [selectedCategory, setSelectedCategory] = useState('outfits');
-    
+    const [selectedCategory, setSelectedCategory] = useState('outfit');
+    const [shopData, setShopData] = useState(null);
+    const [loading, setLoading] = useState(true);
+
     const categories = [
-        { id: 'outfits', name: 'Outfits', icon: 'shirt' },
-        { id: 'tools', name: 'Tools', icon: 'tool' },
-        { id: 'hats', name: 'Hats', icon: 'crown' },
-        { id: 'houses', name: 'Houses', icon: 'home' }
+        { id: 'outfit', name: 'Outfits', icon: 'shirt' },
+        { id: 'tool', name: 'Tools', icon: 'tool' },
+        { id: 'hat', name: 'Hats', icon: 'crown' },
+        { id: 'house', name: 'Houses', icon: 'home' },
+        { id: 'booster', name: 'Boosters', icon: 'zap' }
     ];
-    
-    const shopItems = {
-        outfits: [
-            {
-                id: 'professional',
-                name: 'Professional Suit',
-                description: 'Look sharp while building!',
-                price: 100,
-                colors: ['#000080', '#8B4513', '#2F4F4F'],
-                unlocked: rewards.housesBuilt >= 5
-            },
-            {
-                id: 'casual',
-                name: 'Casual Wear',
-                description: 'Comfortable building attire',
-                price: 50,
-                colors: ['#87CEEB', '#DDA0DD', '#F0E68C'],
-                unlocked: true
-            },
-            {
-                id: 'superhero',
-                name: 'Super Builder',
-                description: 'Build at super speed!',
-                price: 500,
-                colors: ['#DC143C', '#4169E1', '#FFD700'],
-                unlocked: rewards.streak >= 30
-            }
-        ],
-        tools: [
-            {
-                id: 'golden_hammer',
-                name: 'Golden Hammer',
-                description: 'A prestigious building tool',
-                price: 200,
-                effect: '+10% coins from sessions',
-                unlocked: rewards.coins >= 100
-            },
-            {
-                id: 'power_drill',
-                name: 'Power Drill',
-                description: 'Builds houses faster',
-                price: 150,
-                effect: 'Visual building speed +50%',
-                unlocked: rewards.housesBuilt >= 10
-            },
-            {
-                id: 'blueprint',
-                name: 'Magic Blueprint',
-                description: 'Never lose progress',
-                price: 1000,
-                effect: 'Prevents house demolition once per day',
-                unlocked: rewards.totalFocusTime >= 36000
-            }
-        ],
-        hats: [
-            {
-                id: 'cowboy',
-                name: 'Cowboy Hat',
-                description: 'Yeehaw! Build em up!',
-                price: 75,
-                unlocked: rewards.housesBuilt >= 3
-            },
-            {
-                id: 'crown',
-                name: 'Builder Crown',
-                description: 'For the master builder',
-                price: 300,
-                unlocked: rewards.streak >= 14
-            },
-            {
-                id: 'viking',
-                name: 'Viking Helmet',
-                description: 'Conquer your focus!',
-                price: 150,
-                unlocked: rewards.housesBuilt >= 20
-            }
-        ],
-        houses: [
-            {
-                id: 'mansion',
-                name: 'Luxury Mansion',
-                description: 'The ultimate building project',
-                price: 1000,
-                buildTime: '2+ hours',
-                unlocked: rewards.housesBuilt >= 15
-            },
-            {
-                id: 'castle',
-                name: 'Medieval Castle',
-                description: 'A fortress of focus',
-                price: 2000,
-                buildTime: '3+ hours',
-                unlocked: rewards.streak >= 50
-            },
-            {
-                id: 'skyscraper',
-                name: 'Modern Skyscraper',
-                description: 'Reach for the sky!',
-                price: 5000,
-                buildTime: '4+ hours',
-                unlocked: rewards.housesBuilt >= 50
-            }
-        ]
-    };
-    
-    const handlePurchase = (item) => {
-        if (rewards.coins >= item.price && item.unlocked) {
-            if (rewards.spendCoins(item.price)) {
-                gameState.addPurchasedItem(selectedCategory, item.id);
-                
-                // Apply the item immediately if it's a customization
-                if (selectedCategory === 'outfits') {
-                    gameState.updateBuilderCustomization('outfit', item.id);
-                } else if (selectedCategory === 'hats') {
-                    gameState.updateBuilderCustomization('hat', item.id);
-                } else if (selectedCategory === 'tools') {
-                    gameState.updateBuilderCustomization('tool', item.id);
-                } else if (selectedCategory === 'houses') {
-                    gameState.unlockHouseType(item.id);
+
+    // Trigger feather icons after render
+    useEffect(() => {
+        setTimeout(() => { if (window.feather) feather.replace(); }, 50);
+    });
+
+    useEffect(() => {
+        const fetchShop = async () => {
+            try {
+                if (!gameState?.token) {
+                    setLoading(false);
+                    return;
                 }
-                
-                alert(`Successfully purchased ${item.name}!`);
+                const res = await window.api.shop.getAll();
+                setShopData(res.categories);
+            } catch (err) {
+                console.error("Failed to load shop items", err);
+            } finally {
+                setLoading(false);
             }
-        } else if (!item.unlocked) {
-            alert(`This item is not yet unlocked. ${item.unlockCondition || 'Keep building to unlock it!'}`);
+        };
+        fetchShop();
+    }, [gameState?.token]);
+
+    const handlePurchase = async (item) => {
+        if (!item.owned && rewards.coins >= item.price) {
+            try {
+                // Backend transaction logic
+                await window.api.shop.buy(item.itemId);
+
+                // Sync coins and stats with backend again
+                if (rewards.syncWithBackend) {
+                    rewards.syncWithBackend();
+                } else {
+                    rewards.spendCoins(item.price);
+                }
+
+                // Update local ownership immediately so button turns green without needing a refresh
+                setShopData(prev => {
+                    const next = { ...prev };
+                    if (next[item.category]) {
+                        next[item.category] = next[item.category].map(i =>
+                            i.itemId === item.itemId ? { ...i, owned: true } : i
+                        );
+                    }
+                    return next;
+                });
+
+                // Reflect immediately in gameState (for profile/3D view)
+                if (item.category === 'outfit') gameState.updateBuilderCustomization('outfit', item.itemId);
+                else if (item.category === 'hat') gameState.updateBuilderCustomization('hat', item.itemId);
+                else if (item.category === 'tool') gameState.updateBuilderCustomization('tool', item.itemId);
+                else if (item.category === 'house') gameState.unlockHouseType(item.itemId);
+
+                alert(`Successfully purchased ${item.name}!`);
+            } catch (err) {
+                alert(err.message || 'Purchase failed');
+            }
+        } else if (item.owned) {
+            // Future enhancement: Equip item logic
+            alert('You already own this item!');
         } else {
             alert('Not enough coins!');
         }
     };
-    
-    const isItemOwned = (item) => {
-        return gameState.purchasedItems[selectedCategory]?.includes(item.id) || false;
-    };
-    
+
+    if (loading) {
+        return (
+            <div className="shop-panel" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <p>Loading Shop Items...</p>
+            </div>
+        );
+    }
+
+    const itemsToShow = shopData && shopData[selectedCategory] ? shopData[selectedCategory] : [];
+
     return (
         <div className="shop-panel">
             <h2>Builder's Shop</h2>
-            
+
             <div className="coins-display">
                 <div className="current-coins">
                     <i data-feather="dollar-sign"></i>
                     <span>{rewards.coins} Coins</span>
                 </div>
             </div>
-            
+
             {/* Category Tabs */}
             <div className="shop-categories">
                 {categories.map(category => (
@@ -165,116 +111,71 @@ const ShopPanel = ({ gameState, rewards }) => {
                     </button>
                 ))}
             </div>
-            
+
             {/* Shop Items */}
             <div className="shop-items">
-                {shopItems[selectedCategory].map(item => (
-                    <div 
-                        key={item.id}
-                        className={`shop-item ${!item.unlocked ? 'locked' : ''} ${isItemOwned(item) ? 'owned' : ''}`}
+                {itemsToShow.length === 0 ? (
+                    <p style={{ textAlign: 'center', opacity: 0.6, gridColumn: '1 / -1', padding: '20px' }}>No items available in this category.</p>
+                ) : itemsToShow.map(item => (
+                    <div
+                        key={item.itemId}
+                        className={`shop-item ${item.owned ? 'owned' : ''}`}
                     >
                         <div className="item-header">
-                            <h3>{item.unlocked ? item.name : 'Locked Item'}</h3>
-                            {isItemOwned(item) && (
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.2em' }}>{item.emoji}</span>
+                                {item.name}
+                            </h3>
+                            {item.owned && (
                                 <span className="owned-badge">
-                                    <i data-feather="check"></i>
-                                    Owned
+                                    <i data-feather="check"></i> Owned
                                 </span>
                             )}
                         </div>
-                        
+
                         <div className="item-content">
-                            <p className="item-description">
-                                {item.unlocked ? item.description : 'Complete more challenges to unlock this item!'}
-                            </p>
-                            
-                            {item.effect && item.unlocked && (
-                                <div className="item-effect">
-                                    <i data-feather="zap"></i>
-                                    <span>{item.effect}</span>
-                                </div>
-                            )}
-                            
-                            {item.colors && item.unlocked && (
-                                <div className="item-colors">
-                                    <span>Available colors:</span>
-                                    <div className="color-preview">
-                                        {item.colors.map(color => (
-                                            <div 
-                                                key={color}
-                                                className="color-dot"
-                                                style={{ backgroundColor: color }}
-                                            ></div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {item.buildTime && item.unlocked && (
-                                <div className="build-time">
-                                    <i data-feather="clock"></i>
-                                    <span>Build time: {item.buildTime}</span>
+                            <p className="item-description">{item.description}</p>
+                            {item.isPremium && (
+                                <div className="item-effect" style={{ color: '#FFD700', display: 'flex', alignItems: 'center', gap: '5px', marginTop: '10px' }}>
+                                    <i data-feather="star" style={{ width: '14px' }}></i> Premium Item
                                 </div>
                             )}
                         </div>
-                        
+
                         <div className="item-footer">
                             <div className="item-price">
-                                <i data-feather="dollar-sign"></i>
-                                <span>{item.unlocked ? item.price : '???'}</span>
+                                <i data-feather="dollar-sign"></i> <span>{item.price}</span>
                             </div>
-                            
+
                             <button
-                                className={`btn ${isItemOwned(item) ? 'btn-success' : 'btn-primary'}`}
+                                className={`btn ${item.owned ? 'btn-success' : 'btn-primary'}`}
                                 onClick={() => handlePurchase(item)}
-                                disabled={!item.unlocked || isItemOwned(item) || rewards.coins < item.price}
+                                disabled={item.owned || rewards.coins < item.price}
                             >
-                                {isItemOwned(item) ? (
-                                    <>
-                                        <i data-feather="check"></i>
-                                        Owned
-                                    </>
-                                ) : !item.unlocked ? (
-                                    <>
-                                        <i data-feather="lock"></i>
-                                        Locked
-                                    </>
+                                {item.owned ? (
+                                    <> <i data-feather="check"></i> Owned </>
                                 ) : rewards.coins < item.price ? (
-                                    <>
-                                        <i data-feather="dollar-sign"></i>
-                                        Need {item.price - rewards.coins} more
-                                    </>
+                                    <> <i data-feather="dollar-sign"></i> Need {item.price - rewards.coins} more </>
                                 ) : (
-                                    <>
-                                        <i data-feather="shopping-cart"></i>
-                                        Buy Now
-                                    </>
+                                    <> <i data-feather="shopping-cart"></i> Buy Now </>
                                 )}
                             </button>
                         </div>
                     </div>
                 ))}
             </div>
-            
-            {/* Unlock Conditions */}
+
+            {/* Unlock Conditions Guide */}
             <div className="unlock-guide">
-                <h3>How to Unlock Items</h3>
+                <h3>Tips</h3>
                 <div className="unlock-tips">
                     <div className="tip">
-                        <i data-feather="home"></i>
-                        <span>Build houses to unlock new outfits and tools</span>
+                        <i data-feather="dollar-sign"></i>
+                        <span>Start focus sessions to earn 1 coin per minute</span>
                     </div>
                     <div className="tip">
                         <i data-feather="zap"></i>
-                        <span>Maintain streaks to unlock special hats</span>
-                    </div>
-                    <div className="tip">
-                        <i data-feather="clock"></i>
-                        <span>Focus for long periods to unlock premium houses</span>
-                    </div>
-                    <div className="tip">
-                        <i data-feather="dollar-sign"></i>
-                        <span>Earn coins by completing focus sessions</span>
+                        <span>Maintain a multi-day streak for huge coin bonuses</span>
                     </div>
                 </div>
             </div>

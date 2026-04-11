@@ -1,42 +1,88 @@
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const ProfilePanel = ({ gameState, rewards }) => {
     const [showCustomization, setShowCustomization] = useState(false);
-    
+    const [isSaving, setIsSaving] = useState(false);
+
     const handleCustomizationChange = (category, value) => {
         gameState.updateBuilderCustomization(category, value);
     };
-    
+
+    // Auto-save name and gender to the backend
+    useEffect(() => {
+        if (!gameState?.token || !showCustomization) return;
+
+        const saveTimeout = setTimeout(async () => {
+            setIsSaving(true);
+            try {
+                await window.api.users.updateProfile({
+                    name: gameState.builderCustomization.name,
+                    gender: gameState.builderCustomization.gender
+                });
+            } catch (err) {
+                console.error("Failed to auto-save profile to backend", err);
+            } finally {
+                setIsSaving(false);
+            }
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(saveTimeout);
+    }, [gameState.builderCustomization.name, gameState.builderCustomization.gender, gameState?.token, showCustomization]);
+
     return (
-        <div className="profile-panel">
-            <h2>Builder Profile</h2>
-            
+        <div className="profile-panel" style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Builder Profile</h2>
+                <button
+                    onClick={() => {
+                        if (confirm('Are you sure you want to log out?')) {
+                            gameState.logout();
+                        }
+                    }}
+                    style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 107, 107, 0.4)',
+                        color: '#ff6b6b',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.9em'
+                    }}
+                >
+                    <i data-feather="log-out" style={{ width: '16px', height: '16px' }}></i> Log Out
+                </button>
+            </div>
+
             {/* Builder Info */}
             <div className="builder-info">
                 <div className="builder-avatar">
                     <div className="avatar-preview">
                         {/* Simple 2D representation of the builder */}
-                        <div 
+                        <div
                             className="avatar-body"
                             style={{ backgroundColor: gameState.builderCustomization.overallColor }}
                         ></div>
-                        <div 
+                        <div
                             className="avatar-head"
                             style={{ backgroundColor: gameState.builderCustomization.skinColor }}
                         ></div>
-                        <div 
+                        <div
                             className="avatar-hat"
                             style={{ backgroundColor: gameState.builderCustomization.hatColor }}
                         ></div>
                     </div>
-                    
-                    <button 
-                        className="btn btn-outline-primary"
+
+                    <button
+                        className={`btn ${showCustomization ? 'btn-primary' : 'btn-outline-primary'}`}
                         onClick={() => setShowCustomization(!showCustomization)}
                     >
-                        <i data-feather="edit-2"></i>
-                        Customize
+                        <i data-feather={showCustomization ? "check" : "edit-2"}></i>
+                        {showCustomization ? 'Done' : 'Customize'}
                     </button>
                 </div>
-                
+
                 <div className="builder-stats">
                     <h3>{gameState.builderCustomization.name || 'Builder'}</h3>
                     <p>Gender: {gameState.builderCustomization.gender}</p>
@@ -44,12 +90,15 @@ const ProfilePanel = ({ gameState, rewards }) => {
                     <p>Experience: {rewards.totalFocusTime} seconds</p>
                 </div>
             </div>
-            
+
             {/* Customization Panel */}
             {showCustomization && (
                 <div className="customization-panel">
-                    <h4>Customize Your Builder</h4>
-                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ margin: 0 }}>Customize Your Builder</h4>
+                        {isSaving && <span style={{ fontSize: '0.85em', color: '#4CAF50', display: 'flex', alignItems: 'center', gap: '4px' }}><i data-feather="refresh-cw" className="spinning-icon" style={{ width: '12px' }}></i> Saving...</span>}
+                    </div>
+
                     <div className="customization-options">
                         <div className="option-group">
                             <label>Name:</label>
@@ -61,7 +110,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                                 placeholder="Enter builder name"
                             />
                         </div>
-                        
+
                         <div className="option-group">
                             <label>Gender:</label>
                             <div className="radio-group">
@@ -87,7 +136,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                                 </label>
                             </div>
                         </div>
-                        
+
                         <div className="option-group">
                             <label>Overall Color:</label>
                             <div className="color-selector">
@@ -101,7 +150,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                                 ))}
                             </div>
                         </div>
-                        
+
                         <div className="option-group">
                             <label>Hat Color:</label>
                             <div className="color-selector">
@@ -115,7 +164,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                                 ))}
                             </div>
                         </div>
-                        
+
                         <div className="option-group">
                             <label>Skin Color:</label>
                             <div className="color-selector">
@@ -132,13 +181,13 @@ const ProfilePanel = ({ gameState, rewards }) => {
                     </div>
                 </div>
             )}
-            
+
             {/* Achievement Gallery */}
             <div className="achievement-gallery">
                 <h3>Achievement Gallery</h3>
                 <div className="achievement-grid">
                     {rewards.allAchievements.map((achievement, index) => (
-                        <div 
+                        <div
                             key={index}
                             className={`achievement-card ${achievement.unlocked ? 'unlocked' : 'locked'}`}
                         >
@@ -158,7 +207,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                     ))}
                 </div>
             </div>
-            
+
             {/* Village Overview */}
             <div className="village-overview">
                 <h3>Your Village</h3>
@@ -176,7 +225,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                         <span>Level {Math.floor(gameState.completedHouses.length / 5) + 1} Village</span>
                     </div>
                 </div>
-                
+
                 <div className="house-types-built">
                     <h4>Houses in Your Village:</h4>
                     <div className="house-type-list">
@@ -194,7 +243,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Focus Statistics */}
             <div className="focus-statistics">
                 <h3>Focus Statistics</h3>
