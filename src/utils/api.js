@@ -1,6 +1,10 @@
 // src/utils/api.js — BUILDHAUS Backend API Client
 // All methods return Promises and throw on non-2xx responses.
-const API_BASE_URL = `http://${window.location.hostname}:3001/api`;
+// Auto-detect: in production the backend serves the frontend on the same origin.
+// In development, connect to the local backend on port 3001.
+const API_BASE_URL = (window.location.port === '3001' || window.location.port === '')
+    ? '/api'
+    : `http://${window.location.hostname}:3001/api`;
 
 const api = {
     // ── Internal fetch wrapper ─────────────────────────────────────────────────

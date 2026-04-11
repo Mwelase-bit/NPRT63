@@ -195,6 +195,7 @@ const App = () => {
                         gameState={gameState}
                         timer={timer}
                         interruptionDetected={interruptionDetected}
+                        housesBuilt={rewards.housesBuilt || 0}
                     />
                 </ErrorBoundary>
             </div>

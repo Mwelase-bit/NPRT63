@@ -1,5 +1,5 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const GameScene = ({ gameState, timer, interruptionDetected }) => {
+const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) => {
     const sceneRef = useRef();
     
     const setupScene = ({ scene, camera, renderer }) => {
@@ -883,11 +883,12 @@ const GameScene = ({ gameState, timer, interruptionDetected }) => {
     };
     
     const createVillageBackground = (scene) => {
-        console.log('Creating village background...');
+        console.log('Creating village background (progress-aware)...');
         
-        // Village house positions (closer and more visible)
+        // Village house positions — ordered by progression
+        // Cottages first (earned 1-8), then townhouses (9-16), then castles (17-23)
         const villagePositions = [
-            // Cottages (closer to camera, more visible)
+            // Cottages (closest, earned first)
             { type: 'cottage', pos: [-18, 0, -15], scale: 1.2 },
             { type: 'cottage', pos: [-22, 0, -12], scale: 1.0 },
             { type: 'cottage', pos: [-26, 0, -18], scale: 1.3 },
@@ -897,7 +898,7 @@ const GameScene = ({ gameState, timer, interruptionDetected }) => {
             { type: 'cottage', pos: [-12, 0, -25], scale: 1.1 },
             { type: 'cottage', pos: [12, 0, -28], scale: 1.0 },
 
-            // Townhouses (middle distance, more prominent)
+            // Townhouses (earned 9-16)
             { type: 'townhouse', pos: [-30, 0, -8], scale: 0.9 },
             { type: 'townhouse', pos: [-35, 0, -3], scale: 1.0 },
             { type: 'townhouse', pos: [30, 0, -10], scale: 0.9 },
@@ -907,7 +908,7 @@ const GameScene = ({ gameState, timer, interruptionDetected }) => {
             { type: 'townhouse', pos: [-8, 0, 30], scale: 1.0 },
             { type: 'townhouse', pos: [8, 0, 32], scale: 1.0 },
 
-            // Castles (background but more visible)
+            // Castles (earned 17-23)
             { type: 'castle', pos: [-40, 0, 5], scale: 0.8 },
             { type: 'castle', pos: [40, 0, 8], scale: 0.8 },
             { type: 'castle', pos: [-10, 0, 40], scale: 0.9 },
@@ -917,20 +918,45 @@ const GameScene = ({ gameState, timer, interruptionDetected }) => {
             { type: 'castle', pos: [25, 0, 37], scale: 0.8 },
         ];
         
+        // Create ALL houses but start them hidden (visible = false)
+        const villageHouseGroups = [];
         villagePositions.forEach((house, index) => {
-            createVillageHouse(scene, house.type, house.pos, house.scale);
+            const houseGroup = new THREE.Group();
+            
+            if (house.type === 'cottage') {
+                createCottage(houseGroup, house.scale);
+            } else if (house.type === 'townhouse') {
+                createTownhouse(houseGroup, house.scale);
+            } else if (house.type === 'castle') {
+                createVillageCastle(houseGroup, house.scale);
+            }
+            
+            houseGroup.position.set(house.pos[0], house.pos[1], house.pos[2]);
+            houseGroup.castShadow = true;
+            houseGroup.visible = false; // Start hidden — revealed by updateVillageVisibility
+            scene.add(houseGroup);
+            villageHouseGroups.push(houseGroup);
         });
         
-        // Add village paths connecting houses
-        createVillagePaths(scene);
-
-        // Add village decorations
-        createVillageDecorations(scene);
+        // Store for dynamic visibility updates
+        scene.userData.villageHouses = villageHouseGroups;
+        scene.userData.villagePositions = villagePositions;
         
-        // Add village lighting to make houses more visible
+        // Paths, decorations and lighting are always visible (they're the ground/atmosphere)
+        createVillagePaths(scene);
+        createVillageDecorations(scene);
         addVillageLighting(scene);
 
-        console.log('Village background created with', villagePositions.length, 'houses');
+        console.log('Village background created with', villagePositions.length, 'houses (all hidden until earned)');
+    };
+    
+    // Dynamically show/hide village houses based on housesBuilt count
+    const updateVillageVisibility = (scene, count) => {
+        if (!scene?.userData?.villageHouses) return;
+        const houses = scene.userData.villageHouses;
+        for (let i = 0; i < houses.length; i++) {
+            houses[i].visible = i < count;
+        }
     };
     
     // Add lighting to make village houses more visible
@@ -2628,6 +2654,13 @@ const GameScene = ({ gameState, timer, interruptionDetected }) => {
         };
     }, [gameState.isBuilding, gameState.buildStage]);
 
+    // Reactively update village visibility when housesBuilt changes
+    useEffect(() => {
+        if (!sceneRef.current) return;
+        const { scene } = sceneRef.current;
+        updateVillageVisibility(scene, housesBuilt);
+        console.log('Village updated: showing', housesBuilt, 'houses');
+    }, [housesBuilt]);
 
     return React.createElement(window.ThreeCanvas, {
         camera: { position: [20, 15, 20], fov: 45 },

@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node backend/server.js",
     "server": "node backend/server.js",
     "dev": "npx serve -l 3000",
     "test": "node backend/tests/api.test.js"

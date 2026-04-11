@@ -23,16 +23,26 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Global Middleware ────────────────────────────────────────────────────────
-app.use(cors()); // Allow all origins during development
+const isProduction = process.env.NODE_ENV === 'production';
+app.use(cors()); // Allow all origins (tighten in production if needed)
 app.use(express.json({ limit: '2mb' }));
 app.use(sanitiseBody);       // Trim all incoming string fields
 app.use(generalLimiter);     // 60 req/min per IP globally
 
 // Request logger (development)
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-});
+if (!isProduction) {
+    app.use((req, res, next) => {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+        next();
+    });
+}
+
+// ─── Serve frontend static files ──────────────────────────────────────────────
+// In production, the backend serves the frontend so everything runs on one port.
+app.use(express.static(path.join(__dirname, '..'), {
+    extensions: ['html'],
+    index: 'index.html'
+}));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
