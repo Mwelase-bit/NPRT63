@@ -2539,11 +2539,11 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
                         p.scale.copy(p.userData.originalScale || p.scale);
                     }
                 });
-            } else if (part && part.material) {
-                part.material.opacity = 0;
-                part.position.copy(part.userData.originalPosition || part.position);
-                part.rotation.copy(part.userData.originalRotation || part.rotation);
-                part.scale.copy(part.userData.originalScale || part.scale);
+            } else if (part && part.isMesh) {
+                if (part.material) part.material.opacity = 0;
+                if (part.position) part.position.copy(part.userData.originalPosition || part.position);
+                if (part.rotation) part.rotation.copy(part.userData.originalRotation || part.rotation);
+                if (part.scale) part.scale.copy(part.userData.originalScale || part.scale);
             }
         });
         
@@ -2584,7 +2584,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
                             p.userData.originalScale = p.scale.clone();
                         }
                     });
-                } else if (part) {
+                } else if (part && part.isMesh && part.position) {
                     part.userData.originalPosition = part.position.clone();
                     part.userData.originalRotation = part.rotation.clone();
                     part.userData.originalScale = part.scale.clone();
