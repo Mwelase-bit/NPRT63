@@ -143,5 +143,75 @@ The inclusion of the `faculty` attribute enables the system to partition the stu
 
 ---
 
-*BUILDHAUS — Empowering academic focus through gamified productivity.*
+## 6. Business Processes
+
+This section maps each business process in BUILDHAUS/CampusBuilder to the specific user tasks that drive it. Each process is described as a step-by-step workflow that traces the actions performed by the student, the responses of the system, and the resulting state changes. The goal is to provide a clear, traceable link between the user experience and the underlying system behaviour.
+
+### BP01 — User Registration and Authentication
+1. **Step 1:** Student downloads the application from the store.
+2. **Step 2:** Student opens the app and selects Register. The system displays the registration form.
+3. **Step 3:** Student enters their display name, institutional or personal email address, field of study, and academic year.
+4. **Step 4:** System validates the input fields and sends an email verification link.
+5. **Step 5:** Student clicks the verification link. The system activates the account and redirects to the home dashboard.
+6. **Step 6:** On subsequent visits, the student selects Login and enters credentials or signs in via Google OAuth 2.0.
+7. **Step 7:** System authenticates the session and loads the personalised dashboard.
+
+### BP02 — Starting and Completing a Focus Session
+1. **Step 1:** Student navigates to the Focus Screen from the bottom navigation bar.
+2. **Step 2:** Student selects a preset duration (25 min, 1 hour, 2 hours, 3 hours) or enters a custom duration between 5 minutes and 8 hours.
+3. **Step 3:** Student taps Start Session. The system initiates a WebSocket heartbeat and begins the building animation.
+4. **Step 4:** The two-dimensional building rises incrementally across at least eight visible construction stages.
+5. **Step 5:** If the student exits the app or locks the screen, the system detects two missed heartbeats and triggers the destruction countdown.
+6. **Step 6:** If the student does not return within 30 seconds, the building collapses permanently and the session is recorded as abandoned.
+7. **Step 7:** If the student completes the full session, the system awards XP based on session duration, saves the completed building to the collection, and updates the daily streak counter.
+
+### BP03 — Viewing and Managing the Building Collection
+1. **Step 1:** Student taps the Collection icon in the bottom navigation bar.
+2. **Step 2:** System retrieves and displays all completed buildings associated with the student's account.
+3. **Step 3:** Each building card shows the structure image, session date, and session duration.
+4. **Step 4:** Student taps a building to view its detail screen.
+5. **Step 5:** Student selects Share to generate a shareable image of the building for posting to friends.
+
+### BP04 — Class Group Leaderboard Participation
+1. **Step 1:** Lecturer or student administrator creates a class group and receives a unique invite code.
+2. **Step 2:** Student navigates to Groups, selects Join Group, and enters the invite code.
+3. **Step 3:** System verifies the code and adds the student to the group leaderboard.
+4. **Step 4:** Weekly rankings are calculated and displayed every Monday at 00:00, showing each member's total focused hours for the preceding week.
+5. **Step 5:** Student views their position, their total hours, and the hours of every peer in the group.
+
+### BP05 — Viewing Personal Analytics
+1. **Step 1:** Student navigates to the Analytics screen.
+2. **Step 2:** System retrieves the student's full session history from the database.
+3. **Step 3:** System renders daily bar charts, weekly trend lines, and a full session log.
+4. **Step 4:** Month-on-month improvement is highlighted automatically where an increase is detected.
+5. **Step 5:** Student can filter the view by date range to examine specific study periods.
+
+---
+
+## 7. Functional Requirements
+
+Functional requirements define the specific inputs that the system accepts, the processing it must perform on those inputs, and the outputs it must produce. Each requirement below is derived directly from the features defined in Phase 1 and is expressed using an Input-Process-Output structure to facilitate unambiguous implementation and testing.
+
+| ID | Feature | Input | Process | Output |
+|---|---|---|---|---|
+| **FR01** | User Registration | Student email and profile details | Validate inputs, send verification email, create account record | Verified account created; confirmation email sent |
+| **FR02** | User Login | Email and password or Google OAuth token | Authenticate credentials against stored hash or OAuth provider | Session token issued; dashboard loaded |
+| **FR03** | Profile Management | Updated display name, institution, field of study, year | Validate and persist updated profile fields to database | Profile record updated; confirmation displayed |
+| **FR04** | Focus Session Start | Selected or custom session duration | Initialise WebSocket heartbeat, start countdown timer, begin building animation | Session record created with status Active |
+| **FR05** | Interruption Detection | Heartbeat signal from mobile client | Monitor WebSocket for two consecutive missed heartbeats | Destruction countdown triggered if heartbeat absent for two cycles |
+| **FR06** | Building Destruction | Confirmed missed-heartbeat event | Collapse animation played, session status set to Abandoned, no recovery permitted | Session recorded as Abandoned; XP not awarded |
+| **FR07** | Session Completion | Timer reaching zero with unbroken heartbeat | Award XP, save building to collection, increment streak counter | Building saved permanently; XP balance updated; streak incremented |
+| **FR08** | Building Collection | Student account identifier | Retrieve all completed buildings from database, render collection view | Paginated list of completed buildings with metadata displayed |
+| **FR09** | XP and Progression | Completed session duration | Calculate XP at rate of one point per focused minute, apply bonus for sessions over two hours, update tier progress | XP balance updated; tier unlocked if threshold crossed |
+| **FR10** | Daily Streak Tracking | Session completion timestamp | Compare completion date to last active date, increment or reset streak counter | Streak counter updated; badge awarded at 7, 30, and 100 days |
+| **FR11** | Achievement Badges | Triggering event (e.g. first session, first destruction, hour milestone) | Evaluate badge eligibility, insert badge record if conditions met | Badge added to profile; push notification sent |
+| **FR12** | Friend System | Username or QR code scan | Send or accept friend request, link accounts in friendships table | Friend relationship persisted; activity feed updated |
+| **FR13** | Class Group Leaderboard | Valid invite code | Validate code, add student to group, calculate weekly rankings on schedule | Student visible on leaderboard; rankings refreshed weekly |
+| **FR14** | Campus-Wide Leaderboard | Opt-in preference and institutional affiliation | Aggregate weekly study hours for all opted-in students at same institution, rank descending | Ranked campus leaderboard displayed; student may withdraw at any time |
+| **FR15** | Personal Analytics | Date range filter (optional) | Retrieve session history, compute daily totals, weekly trends, month-on-month change | Bar charts, trend lines, and session log rendered on Analytics screen |
+| **FR16** | Push Notifications | User notification preferences | Trigger FCM notification for streak reminders, friend activity, challenge invitations, weekly results | Push notification delivered to device; each type individually toggleable |
+
+---
+
+*BUILDHAUS / CampusBuilder — Empowering academic focus through gamified productivity.*
 *Sol Plaatje University | Faculty of Natural and Applied Sciences*
