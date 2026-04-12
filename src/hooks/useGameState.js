@@ -2,7 +2,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const useGameState = () => {
     const [gameState, setGameState] = useState({
         buildStage: 0,
-        currentHouse: 'castle',
+        currentHouse: 'cottage',
         isBuilding: false,
         isCollapsing: false,
         completedHouses: [],

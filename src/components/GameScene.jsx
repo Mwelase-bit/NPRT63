@@ -80,8 +80,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             // Create the construction worker avatar
             createConstructionWorker(scene);
             
-            // Create a beautiful castle estate (will be built in phases)
-            createCastleEstate(scene);
+            // Create the main building based on current house type
+            createCurrentBuilding(scene, gameState.currentHouse);
             
             // Add enhanced decorative elements
             addEnhancedDecorations(scene);
@@ -361,11 +361,39 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         console.log('Construction worker with wheelbarrow created');
     };
     
-    const createCastleEstate = (scene) => {
-        const castleGroup = new THREE.Group();
+    // ─── Dynamic Building Creator ─────────────────────────────────────────
+    // Creates the main building based on house type, with phase-based opacity.
+    // Each child mesh gets a userData.buildPhase (1-4) so the generic
+    // buildPhase/hideCastle/showCompletedCastle functions can work with ANY type.
+    const createCurrentBuilding = (scene, houseType) => {
+        const buildingGroup = new THREE.Group();
+        const type = houseType || 'cottage';
         
-        // Store building parts for building phases
-        const buildingParts = {
+        console.log(`Creating main building: ${type}`);
+        
+        if (type === 'cottage' || type === 'treehouse') {
+            createMainCottage(buildingGroup);
+        } else if (type === 'townhouse' || type === 'lighthouse' || type === 'mansion') {
+            createMainTownhouse(buildingGroup);
+        } else {
+            // castle, skyscraper, or anything else falls back to castle
+            createMainCastle(buildingGroup);
+        }
+        
+        // All children start hidden (opacity 0)
+        buildingGroup.traverse(child => {
+            if (child.isMesh && child.material) {
+                child.material.transparent = true;
+                child.material.opacity = 0;
+            }
+        });
+        
+        scene.add(buildingGroup);
+        scene.userData.houseGroup = buildingGroup;
+        
+        // Store parts reference for the phase system
+        // We use a generic approach: group children by their buildPhase tag
+        scene.userData.houseParts = {
             foundation: null,
             outerWalls: [],
             towers: [],
@@ -373,210 +401,343 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             gatehouse: null,
             windows: [],
             entrance: null,
-            flags: []
+            flags: [],
+            // Store ALL meshes grouped by phase for generic animation
+            phaseGroups: { 1: [], 2: [], 3: [], 4: [] }
         };
         
-        // Foundation (Phase 1) - Castle foundation
-        const foundationGeometry = new THREE.BoxGeometry(8, 1, 8);
-        const foundationMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x2F4F4F,
-            transparent: true,
-            opacity: 0
+        // Populate phaseGroups from tagged meshes
+        buildingGroup.traverse(child => {
+            if (child.isMesh && child.userData.buildPhase) {
+                const phase = child.userData.buildPhase;
+                scene.userData.houseParts.phaseGroups[phase].push(child);
+                
+                // Also fill the named references for destruction animation
+                if (phase === 1) scene.userData.houseParts.foundation = scene.userData.houseParts.foundation || child;
+                if (phase === 2) scene.userData.houseParts.outerWalls.push(child);
+                if (phase === 3) scene.userData.houseParts.towers.push(child);
+                if (phase === 4) {
+                    scene.userData.houseParts.keep = scene.userData.houseParts.keep || child;
+                    scene.userData.houseParts.windows.push(child);
+                }
+            }
         });
-        const foundation = new THREE.Mesh(foundationGeometry, foundationMaterial);
+        
+        console.log(`${type} building created (all parts hidden, ready for phase building)`);
+    };
+    
+    // ─── Main Cottage (center, phase-tagged) ───────────────────────────────
+    const createMainCottage = (group) => {
+        const s = 1.8; // Scale up for center building
+
+        // Phase 1: Foundation
+        const foundation = new THREE.Mesh(
+            new THREE.BoxGeometry(3.2*s, 0.3*s, 3.2*s),
+            new THREE.MeshLambertMaterial({ color: 0x696969 })
+        );
+        foundation.position.set(0, 0.15*s, 0);
+        foundation.userData.buildPhase = 1;
+        group.add(foundation);
+
+        // Phase 2: Walls
+        const walls = new THREE.Mesh(
+            new THREE.BoxGeometry(3*s, 2.2*s, 3*s),
+            new THREE.MeshLambertMaterial({ color: 0xE6B89C })
+        );
+        walls.position.set(0, 1.1*s + 0.3*s, 0);
+        walls.userData.buildPhase = 2;
+        group.add(walls);
+
+        // Phase 2: Door
+        const door = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8*s, 1.6*s, 0.1*s),
+            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        );
+        door.position.set(0, 0.8*s + 0.3*s, 1.55*s);
+        door.userData.buildPhase = 2;
+        group.add(door);
+
+        // Phase 3: Roof
+        const roof = new THREE.Mesh(
+            new THREE.ConeGeometry(2.3*s, 1.8*s, 8),
+            new THREE.MeshLambertMaterial({ color: 0x8B0000 })
+        );
+        roof.position.set(0, 2.9*s + 0.3*s, 0);
+        roof.rotation.y = Math.PI / 8;
+        roof.userData.buildPhase = 3;
+        group.add(roof);
+
+        // Phase 3: Chimney
+        const chimney = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5*s, 1.2*s, 0.5*s),
+            new THREE.MeshLambertMaterial({ color: 0x8B0000 })
+        );
+        chimney.position.set(1.3*s, 2.8*s, -0.9*s);
+        chimney.userData.buildPhase = 3;
+        group.add(chimney);
+
+        // Phase 4: Windows
+        const windowGeo = new THREE.BoxGeometry(0.7*s, 0.8*s, 0.1*s);
+        const windowMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
+        
+        const lw = new THREE.Mesh(windowGeo, windowMat);
+        lw.position.set(-0.9*s, 1.3*s + 0.3*s, 1.56*s);
+        lw.userData.buildPhase = 4;
+        group.add(lw);
+
+        const rw = new THREE.Mesh(windowGeo, windowMat);
+        rw.position.set(0.9*s, 1.3*s + 0.3*s, 1.56*s);
+        rw.userData.buildPhase = 4;
+        group.add(rw);
+
+        // Phase 4: Door handle
+        const handle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06*s),
+            new THREE.MeshLambertMaterial({ color: 0xFFD700 })
+        );
+        handle.position.set(0.3*s, 0.8*s + 0.3*s, 1.61*s);
+        handle.userData.buildPhase = 4;
+        group.add(handle);
+
+        // Phase 4: Flower gardens
+        const flowerPositions = [[1.5,0,1.5],[-1.5,0,1.5],[1.5,0,-1.5],[-1.5,0,-1.5]];
+        const flowerColors = [0xFF6B9D, 0xFFB6C1, 0xFF69B4, 0xDA70D6];
+        flowerPositions.forEach((pos, i) => {
+            const flower = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08*s),
+                new THREE.MeshLambertMaterial({ color: flowerColors[i] })
+            );
+            flower.position.set(pos[0]*s, 0.08*s, pos[2]*s);
+            flower.userData.buildPhase = 4;
+            group.add(flower);
+        });
+    };
+    
+    // ─── Main Townhouse (center, phase-tagged) ─────────────────────────────
+    const createMainTownhouse = (group) => {
+        const s = 1.5;
+
+        // Phase 1: Foundation
+        const foundation = new THREE.Mesh(
+            new THREE.BoxGeometry(4.2*s, 0.4*s, 3.7*s),
+            new THREE.MeshLambertMaterial({ color: 0x696969 })
+        );
+        foundation.position.set(0, 0.2*s, 0);
+        foundation.userData.buildPhase = 1;
+        group.add(foundation);
+
+        // Phase 2: First floor
+        const floor1 = new THREE.Mesh(
+            new THREE.BoxGeometry(4*s, 2.8*s, 3.5*s),
+            new THREE.MeshLambertMaterial({ color: 0xD2B48C })
+        );
+        floor1.position.set(0, 1.4*s + 0.4*s, 0);
+        floor1.userData.buildPhase = 2;
+        group.add(floor1);
+
+        // Phase 2: Second floor
+        const floor2 = new THREE.Mesh(
+            new THREE.BoxGeometry(3.6*s, 2.8*s, 3.2*s),
+            new THREE.MeshLambertMaterial({ color: 0xDEB887 })
+        );
+        floor2.position.set(0, 4.2*s + 0.4*s, 0);
+        floor2.userData.buildPhase = 2;
+        group.add(floor2);
+
+        // Phase 2: Door
+        const door = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9*s, 2.2*s, 0.1*s),
+            new THREE.MeshLambertMaterial({ color: 0x654321 })
+        );
+        door.position.set(0, 1.4*s + 0.4*s, 1.8*s);
+        door.userData.buildPhase = 2;
+        group.add(door);
+
+        // Phase 3: Roof
+        const roof = new THREE.Mesh(
+            new THREE.BoxGeometry(4.2*s, 0.4*s, 3.7*s),
+            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        );
+        roof.position.set(0, 7.1*s + 0.4*s, 0);
+        roof.rotation.x = -Math.PI / 12;
+        roof.userData.buildPhase = 3;
+        group.add(roof);
+
+        // Phase 3: Attic
+        const attic = new THREE.Mesh(
+            new THREE.BoxGeometry(3.2*s, 1.5*s, 2.8*s),
+            new THREE.MeshLambertMaterial({ color: 0xF5DEB3 })
+        );
+        attic.position.set(0, 6.15*s + 0.4*s, 0);
+        attic.userData.buildPhase = 3;
+        group.add(attic);
+
+        // Phase 3: Chimney
+        const chimney = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4*s, 1.5*s, 0.4*s),
+            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        );
+        chimney.position.set(1.6*s, 7.5*s + 0.4*s, -1.4*s);
+        chimney.userData.buildPhase = 3;
+        group.add(chimney);
+
+        // Phase 4: Balcony
+        const balcony = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5*s, 0.15*s, 1.2*s),
+            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        );
+        balcony.position.set(0, 2.8*s + 0.4*s, 1.6*s);
+        balcony.userData.buildPhase = 4;
+        group.add(balcony);
+
+        // Phase 4: Windows
+        const windowGeo = new THREE.BoxGeometry(0.8*s, 1.0*s, 0.1*s);
+        const windowMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
+        
+        [[-1.2,1.4],[1.2,1.4],[-1.0,4.2],[1.0,4.2]].forEach(([x,y]) => {
+            const w = new THREE.Mesh(windowGeo, windowMat);
+            w.position.set(x*s, y*s + 0.4*s, 1.81*s);
+            w.userData.buildPhase = 4;
+            group.add(w);
+        });
+
+        // Phase 4: Door handle
+        const handle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06*s),
+            new THREE.MeshLambertMaterial({ color: 0xFFD700 })
+        );
+        handle.position.set(0.35*s, 1.4*s + 0.4*s, 1.86*s);
+        handle.userData.buildPhase = 4;
+        group.add(handle);
+
+        // Phase 4: Lamp post
+        const lampPost = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05*s, 0.05*s, 1.2*s, 8),
+            new THREE.MeshLambertMaterial({ color: 0x696969 })
+        );
+        lampPost.position.set(2.8*s, 0.6*s, 1.5*s);
+        lampPost.userData.buildPhase = 4;
+        group.add(lampPost);
+
+        const lamp = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15*s, 8, 6),
+            new THREE.MeshLambertMaterial({ color: 0xFFFF99, emissive: 0xFFFF99, emissiveIntensity: 0.3 })
+        );
+        lamp.position.set(2.8*s, 1.2*s, 1.5*s);
+        lamp.userData.buildPhase = 4;
+        group.add(lamp);
+    };
+    
+    // ─── Main Castle (center, phase-tagged) ────────────────────────────────
+    // Same geometry as the old createCastleEstate but with phase tags
+    const createMainCastle = (group) => {
+        // Phase 1: Foundation
+        const foundation = new THREE.Mesh(
+            new THREE.BoxGeometry(8, 1, 8),
+            new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
+        );
         foundation.position.set(0, 0.5, 0);
         foundation.receiveShadow = true;
-        castleGroup.add(foundation);
-        buildingParts.foundation = foundation;
-        
-        // Outer walls (Phase 2) - Castle perimeter walls
-        const wallHeight = 2;
-        const wallThickness = 0.5;
-        
-        // North wall
-        const northWallGeometry = new THREE.BoxGeometry(8, wallHeight, wallThickness);
-        const wallMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x708090,
-            transparent: true,
-            opacity: 0
-        });
-        const northWall = new THREE.Mesh(northWallGeometry, wallMaterial);
-        northWall.position.set(0, wallHeight/2 + 1, 4);
-        northWall.castShadow = true;
-        castleGroup.add(northWall);
-        buildingParts.outerWalls.push(northWall);
-        
-        // South wall
-        const southWall = new THREE.Mesh(northWallGeometry, wallMaterial);
-        southWall.position.set(0, wallHeight/2 + 1, -4);
-        southWall.castShadow = true;
-        castleGroup.add(southWall);
-        buildingParts.outerWalls.push(southWall);
-        
-        // East wall
-        const eastWallGeometry = new THREE.BoxGeometry(wallThickness, wallHeight, 7);
-        const eastWall = new THREE.Mesh(eastWallGeometry, wallMaterial);
-        eastWall.position.set(4, wallHeight/2 + 1, 0);
-        eastWall.castShadow = true;
-        castleGroup.add(eastWall);
-        buildingParts.outerWalls.push(eastWall);
-        
-        // West wall
-        const westWall = new THREE.Mesh(eastWallGeometry, wallMaterial);
-        westWall.position.set(-4, wallHeight/2 + 1, 0);
-        westWall.castShadow = true;
-        castleGroup.add(westWall);
-        buildingParts.outerWalls.push(westWall);
-        
-        // Corner towers (Phase 3) - Four corner towers
-        const towerHeight = 4;
-        const towerRadius = 0.8;
-        
-        const towerPositions = [
-            [3, 0, 3],   // NE
-            [-3, 0, 3],  // NW
-            [3, 0, -3],  // SE
-            [-3, 0, -3]  // SW
+        foundation.userData.buildPhase = 1;
+        group.add(foundation);
+
+        // Phase 2: Outer walls
+        const wallMat = new THREE.MeshLambertMaterial({ color: 0x708090 });
+        const walls = [
+            { geo: [8, 2, 0.5], pos: [0, 2, 4] },
+            { geo: [8, 2, 0.5], pos: [0, 2, -4] },
+            { geo: [0.5, 2, 7], pos: [4, 2, 0] },
+            { geo: [0.5, 2, 7], pos: [-4, 2, 0] },
         ];
-        
-        towerPositions.forEach((pos, index) => {
-            const towerGeometry = new THREE.CylinderGeometry(towerRadius, towerRadius + 0.2, towerHeight, 8);
-            const towerMaterial = new THREE.MeshLambertMaterial({ 
-                color: 0x708090,
-                transparent: true,
-                opacity: 0
-            });
-            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
-            tower.position.set(pos[0], towerHeight/2 + 1, pos[2]);
+        walls.forEach(w => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...w.geo), wallMat);
+            mesh.position.set(...w.pos);
+            mesh.castShadow = true;
+            mesh.userData.buildPhase = 2;
+            group.add(mesh);
+        });
+
+        // Phase 3: Corner towers
+        const towerPositions = [[3,0,3],[-3,0,3],[3,0,-3],[-3,0,-3]];
+        towerPositions.forEach(pos => {
+            const tower = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.8, 1.0, 4, 8),
+                new THREE.MeshLambertMaterial({ color: 0x708090 })
+            );
+            tower.position.set(pos[0], 3, pos[2]);
             tower.castShadow = true;
-            castleGroup.add(tower);
-            buildingParts.towers.push(tower);
-            
-            // Tower roof (conical)
-            const roofGeometry = new THREE.ConeGeometry(towerRadius + 0.1, 1, 8);
-            const roofMaterial = new THREE.MeshLambertMaterial({ 
-                color: 0x2F4F4F,
-                transparent: true,
-                opacity: 0
-            });
-            const towerRoof = new THREE.Mesh(roofGeometry, roofMaterial);
-            towerRoof.position.set(pos[0], towerHeight + 1.5, pos[2]);
-            towerRoof.castShadow = true;
-            castleGroup.add(towerRoof);
-            buildingParts.towers.push(towerRoof);
+            tower.userData.buildPhase = 3;
+            group.add(tower);
+
+            const towerRoof = new THREE.Mesh(
+                new THREE.ConeGeometry(0.9, 1, 8),
+                new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
+            );
+            towerRoof.position.set(pos[0], 5.5, pos[2]);
+            towerRoof.userData.buildPhase = 3;
+            group.add(towerRoof);
         });
-        
-        // Central keep (Phase 4) - Main castle building
-        const keepGeometry = new THREE.BoxGeometry(4, 3, 4);
-        const keepMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x708090,
-            transparent: true,
-            opacity: 0
-        });
-        const keep = new THREE.Mesh(keepGeometry, keepMaterial);
+
+        // Phase 4: Central keep
+        const keep = new THREE.Mesh(
+            new THREE.BoxGeometry(4, 3, 4),
+            new THREE.MeshLambertMaterial({ color: 0x708090 })
+        );
         keep.position.set(0, 2.5, 0);
         keep.castShadow = true;
-        castleGroup.add(keep);
-        buildingParts.keep = keep;
-        
-        // Keep roof
-        const keepRoofGeometry = new THREE.ConeGeometry(3, 1.5, 8);
-        const keepRoofMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x2F4F4F,
-            transparent: true,
-            opacity: 0
-        });
-        const keepRoof = new THREE.Mesh(keepRoofGeometry, keepRoofMaterial);
+        keep.userData.buildPhase = 4;
+        group.add(keep);
+
+        const keepRoof = new THREE.Mesh(
+            new THREE.ConeGeometry(3, 1.5, 8),
+            new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
+        );
         keepRoof.position.set(0, 5.25, 0);
-        keepRoof.castShadow = true;
-        castleGroup.add(keepRoof);
-        buildingParts.keep = keepRoof;
-        
-        // Gatehouse (Phase 4) - Main entrance
-        const gatehouseGeometry = new THREE.BoxGeometry(2, 2.5, 1);
-        const gatehouseMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x708090,
-            transparent: true,
-            opacity: 0
-        });
-        const gatehouse = new THREE.Mesh(gatehouseGeometry, gatehouseMaterial);
+        keepRoof.userData.buildPhase = 4;
+        group.add(keepRoof);
+
+        // Phase 4: Gatehouse
+        const gatehouse = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 2.5, 1),
+            new THREE.MeshLambertMaterial({ color: 0x708090 })
+        );
         gatehouse.position.set(0, 2.25, 4.5);
-        gatehouse.castShadow = true;
-        castleGroup.add(gatehouse);
-        buildingParts.gatehouse = gatehouse;
-        
-        // Castle windows
-        const windowGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.1);
-        const windowMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x87CEEB,
-            transparent: true,
-            opacity: 0
-        });
-        
-        // Keep windows
-        for (let i = 0; i < 4; i++) {
-            const angle = (i / 4) * Math.PI * 2;
-            const window = new THREE.Mesh(windowGeometry, windowMaterial);
-            window.position.set(
-                Math.cos(angle) * 2.1,
-                2.5,
-                Math.sin(angle) * 2.1
-            );
-            window.rotation.y = angle;
-            castleGroup.add(window);
-            buildingParts.windows.push(window);
-        }
-        
-        // Tower windows
-        towerPositions.forEach((pos, index) => {
-            const towerWindow = new THREE.Mesh(windowGeometry, windowMaterial);
-            towerWindow.position.set(pos[0], 3, pos[2]);
-            castleGroup.add(towerWindow);
-            buildingParts.windows.push(towerWindow);
-        });
-        
-        // Main entrance gate
-        const entranceGeometry = new THREE.BoxGeometry(1.5, 2, 0.1);
-        const entranceMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x8B4513,
-            transparent: true,
-            opacity: 0
-        });
-        const entrance = new THREE.Mesh(entranceGeometry, entranceMaterial);
+        gatehouse.userData.buildPhase = 4;
+        group.add(gatehouse);
+
+        // Phase 4: Entrance door
+        const entrance = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 2, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
+        );
         entrance.position.set(0, 1.5, 4.6);
-        castleGroup.add(entrance);
-        buildingParts.entrance = entrance;
-        
-        // Castle flags (Phase 4)
-        const flagPositions = [
-            [0, 6, 0],    // Keep
-            [3, 5, 3],    // NE tower
-            [-3, 5, 3],   // NW tower
-            [3, 5, -3],   // SE tower
-            [-3, 5, -3]   // SW tower
-        ];
-        
-        flagPositions.forEach((pos, index) => {
-            const flagGeometry = new THREE.BoxGeometry(0.8, 0.5, 0.05);
-            const flagMaterial = new THREE.MeshLambertMaterial({ 
-                color: 0xFF0000,
-                transparent: true,
-                opacity: 0
-            });
-            const flag = new THREE.Mesh(flagGeometry, flagMaterial);
-            flag.position.set(pos[0], pos[1], pos[2]);
-            castleGroup.add(flag);
-            buildingParts.flags.push(flag);
+        entrance.userData.buildPhase = 4;
+        group.add(entrance);
+
+        // Phase 4: Windows
+        const winGeo = new THREE.BoxGeometry(0.6, 0.8, 0.1);
+        const winMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            const w = new THREE.Mesh(winGeo, winMat);
+            w.position.set(Math.cos(a)*2.1, 2.5, Math.sin(a)*2.1);
+            w.rotation.y = a;
+            w.userData.buildPhase = 4;
+            group.add(w);
+        }
+
+        // Phase 4: Flags
+        [[0,6,0],[3,5,3],[-3,5,3],[3,5,-3],[-3,5,-3]].forEach(pos => {
+            const flag = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 0.5, 0.05),
+                new THREE.MeshLambertMaterial({ color: 0xFF0000 })
+            );
+            flag.position.set(...pos);
+            flag.userData.buildPhase = 4;
+            group.add(flag);
         });
-        
-        // Add castle to scene
-        scene.add(castleGroup);
-        scene.userData.houseGroup = castleGroup;
-        scene.userData.houseParts = buildingParts;
-        
-        // Don't show castle by default - only show when not building
-        console.log('Castle estate created (all parts hidden)');
     };
+    
     
     const addEnhancedDecorations = (scene) => {
         // Create elegant estate grounds
@@ -1945,144 +2106,65 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         scene.add(wellRoof);
     };
     
-    // Show completed castle (for background display)
+    // Show completed building (for background display)
     const showCompletedCastle = (buildingParts) => {
-        if (!buildingParts) return;
+        if (!buildingParts || !buildingParts.phaseGroups) return;
         
-        console.log('Showing completed castle in background');
+        console.log('Showing completed building in background');
         
-        // Show all building parts
-        if (buildingParts.foundation) buildingParts.foundation.material.opacity = 1;
-        if (buildingParts.outerWalls) {
-            buildingParts.outerWalls.forEach(wall => {
-                if (wall) wall.material.opacity = 1;
+        // Show all building parts across all phases
+        Object.values(buildingParts.phaseGroups).forEach(phaseGroup => {
+            phaseGroup.forEach(mesh => {
+                if (mesh && mesh.material) mesh.material.opacity = 1;
             });
-        }
-        if (buildingParts.towers) {
-            buildingParts.towers.forEach(tower => {
-                if (tower) tower.material.opacity = 1;
-            });
-        }
-        if (buildingParts.keep) buildingParts.keep.material.opacity = 1;
-        if (buildingParts.gatehouse) buildingParts.gatehouse.material.opacity = 1;
-        
-        if (buildingParts.windows) {
-            buildingParts.windows.forEach(window => {
-                if (window) window.material.opacity = 1;
-            });
-        }
-        
-        if (buildingParts.entrance) buildingParts.entrance.material.opacity = 1;
-        if (buildingParts.flags) {
-            buildingParts.flags.forEach(flag => {
-                if (flag) flag.material.opacity = 1;
-            });
-        }
+        });
     };
     
-    // Hide castle for progressive building
+    // Hide building for progressive building
     const hideCastle = (buildingParts) => {
-        if (!buildingParts) return;
+        if (!buildingParts || !buildingParts.phaseGroups) return;
         
-        console.log('Hiding castle for progressive building');
+        console.log('Hiding building for progressive building');
         
-        // Hide all building parts
-        if (buildingParts.foundation) buildingParts.foundation.material.opacity = 0;
-        if (buildingParts.outerWalls) {
-            buildingParts.outerWalls.forEach(wall => {
-                if (wall) wall.material.opacity = 0;
+        // Hide all building parts across all phases
+        Object.values(buildingParts.phaseGroups).forEach(phaseGroup => {
+            phaseGroup.forEach(mesh => {
+                if (mesh && mesh.material) mesh.material.opacity = 0;
             });
-        }
-        if (buildingParts.towers) {
-            buildingParts.towers.forEach(tower => {
-                if (tower) tower.material.opacity = 0;
-            });
-        }
-        if (buildingParts.keep) buildingParts.keep.material.opacity = 0;
-        if (buildingParts.gatehouse) buildingParts.gatehouse.material.opacity = 0;
-        
-        if (buildingParts.windows) {
-            buildingParts.windows.forEach(window => {
-                if (window) window.material.opacity = 0;
-            });
-        }
-        
-        if (buildingParts.entrance) buildingParts.entrance.material.opacity = 0;
-        if (buildingParts.flags) {
-            buildingParts.flags.forEach(flag => {
-                if (flag) flag.material.opacity = 0;
-            });
-        }
+        });
     };
     
-    // Castle building phases
+    // Generic building phases
     const buildPhase = (phase, buildingParts) => {
-        if (!buildingParts) {
+        if (!buildingParts || !buildingParts.phaseGroups) {
             console.log('No building parts available for building phase', phase);
             return;
         }
         
-        console.log(`Building phase ${phase} - Building parts:`, buildingParts);
+        console.log(`Building phase ${phase} - Revealing meshes...`);
         
-        switch (phase) {
-            case 1: // Foundation
-                if (buildingParts.foundation) {
-                    buildingParts.foundation.material.opacity = 1;
-                    console.log('Castle foundation built!');
+        // Ensure all previous phases are visible and future phases are hidden
+        Object.keys(buildingParts.phaseGroups).forEach(p => {
+            const phaseNum = parseInt(p);
+            const isVisible = phaseNum <= phase;
+            
+            buildingParts.phaseGroups[p].forEach(mesh => {
+                if (mesh && mesh.material) {
+                    mesh.material.opacity = isVisible ? 1 : 0;
                 }
-                break;
-            case 2: // Outer walls
-                if (buildingParts.outerWalls) {
-                    buildingParts.outerWalls.forEach(wall => {
-                        if (wall) wall.material.opacity = 1;
-                    });
-                    console.log('Outer walls built!');
-                }
-                break;
-            case 3: // Corner towers
-                if (buildingParts.towers) {
-                    buildingParts.towers.forEach(tower => {
-                        if (tower) tower.material.opacity = 1;
-                    });
-                    console.log('Corner towers built!');
-                }
-                break;
-            case 4: // Keep, gatehouse, and finishing
-                if (buildingParts.keep) {
-                    buildingParts.keep.material.opacity = 1;
-                    console.log('Central keep built!');
-                }
-                if (buildingParts.gatehouse) {
-                    buildingParts.gatehouse.material.opacity = 1;
-                    console.log('Gatehouse built!');
-                }
-                if (buildingParts.windows) {
-                    buildingParts.windows.forEach(window => {
-                        if (window) window.material.opacity = 1;
-                    });
-                    console.log('Windows installed!');
-                }
-                if (buildingParts.entrance) {
-                    buildingParts.entrance.material.opacity = 1;
-                    console.log('Main gate built!');
-                }
-                if (buildingParts.flags) {
-                    buildingParts.flags.forEach(flag => {
-                        if (flag) flag.material.opacity = 1;
-                    });
-                    console.log('Castle flags raised!');
-                }
-                break;
-        }
+            });
+        });
+        
+        console.log(`Building phase ${phase} complete!`);
     };
     
-    // Dramatic castle destruction system
+    // Dramatic building destruction system
     const destroyHouse = (scene) => {
         const houseParts = scene.userData.houseParts;
         if (!houseParts || scene.userData.isDestroying) return;
         
         scene.userData.isDestroying = true;
-        console.log('💥 CASTLE DESTRUCTION INITIATED! 💥');
+        console.log('💥 BUILDING DESTRUCTION INITIATED! 💥');
         
         // Create dramatic explosion particles
         createExplosionParticles(scene);
@@ -2090,52 +2172,38 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         // Add screen shake effect
         addScreenShake(scene);
         
-        // Dramatic destruction sequence for castle with more visible effects
-        const destructionSequence = [
-            { part: houseParts.flags, delay: 0, fallDirection: [0, -15, 0], rotation: [0, 0, Math.PI] },
-            { part: houseParts.keep, delay: 500, fallDirection: [0, -12, 0], rotation: [0, 0, Math.PI/4] },
-            { part: houseParts.gatehouse, delay: 1000, fallDirection: [3, -10, -2], rotation: [0, 0, -Math.PI/6] },
-            { part: houseParts.towers, delay: 1500, fallDirection: [0, -8, 0], rotation: [0, 0, Math.PI/3] },
-            { part: houseParts.outerWalls, delay: 2000, fallDirection: [0, -6, 0], rotation: [0, 0, Math.PI/8] },
-            { part: houseParts.foundation, delay: 2500, fallDirection: [0, -4, 0], rotation: [0, 0, Math.PI/12] }
-        ];
-        
-        destructionSequence.forEach(({ part, delay, fallDirection, rotation }) => {
-            if (Array.isArray(part)) {
-                part.forEach((p, index) => {
-                    if (p) {
+        // Dynamic destruction sequence based on phase groups (top down: 4 -> 1)
+        if (houseParts.phaseGroups) {
+            // Delay base is 0, each phase we go down adds delay
+            let baseDelay = 0;
+            
+            // Go backwards from phase 4 down to phase 1
+            for (let phase = 4; phase >= 1; phase--) {
+                const meshes = houseParts.phaseGroups[phase] || [];
+                
+                // For each mesh in this phase, apply a destruction animation
+                meshes.forEach((mesh, index) => {
+                    if (mesh) {
                         setTimeout(() => {
-                            animateDestructionWithRotation(p, fallDirection, rotation);
-                        }, delay + (index * 200));
+                            // Calculate a somewhat random downward/outward direction
+                            const fallDirection = [
+                                (Math.random() - 0.5) * (phase * 2), // Scatter wider for higher phases
+                                -(4 + phase * 2), // Fall faster from higher up
+                                (Math.random() - 0.5) * (phase * 2)
+                            ];
+                            const rotation = [
+                                (Math.random() - 0.5) * Math.PI,
+                                (Math.random() - 0.5) * Math.PI,
+                                (Math.random() - 0.5) * Math.PI
+                            ];
+                            animateDestructionWithRotation(mesh, fallDirection, rotation);
+                        }, baseDelay + (index * 50)); // Tiny stagger between pieces in same phase
                     }
                 });
-            } else if (part) {
-                setTimeout(() => {
-                    animateDestructionWithRotation(part, fallDirection, rotation);
-                }, delay);
+                
+                baseDelay += 500; // 500ms between main phases collapsing
             }
-        });
-        
-        // Windows destruction with more dramatic effects
-        setTimeout(() => {
-            if (houseParts.windows) {
-                houseParts.windows.forEach((window, index) => {
-                    setTimeout(() => {
-                        animateDestructionWithRotation(window, [
-                            (Math.random() - 0.5) * 8,
-                            -5,
-                            (Math.random() - 0.5) * 8
-                        ], [0, 0, Math.random() * Math.PI]);
-                    }, index * 200);
-                });
-            }
-            
-            if (houseParts.entrance) {
-                setTimeout(() => {
-                    animateDestructionWithRotation(houseParts.entrance, [0, -6, 4], [0, 0, Math.PI/4]);
-                }, 1000);
-            }
-        }, 2200);
+        }
         
         // Add debris particles during destruction
         setTimeout(() => {
