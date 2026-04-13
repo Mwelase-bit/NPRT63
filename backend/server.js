@@ -4,6 +4,8 @@ require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const WebSocket = require('ws');
 
 // Initialise database (creates/migrates tables and seeds shop data)
 require('./database');
@@ -98,11 +100,47 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// ─── WebSocket Server for Heartbeat (FR04, FR05, FR06) ────────────────────────
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws) => {
+    ws.isAlive = true;
+    
+    // Listen for incoming heartbeat pulses from clients
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'heartbeat') {
+                ws.isAlive = true; // Mark as responsive
+            }
+        } catch (err) {}
+    });
+});
+
+// Check all clients every 5.5 seconds (allowing 5s interval + slight payload delay)
+const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+            // Client missed 2 continuous heartbeats -> terminate connection!
+            // This will instantly fire the `onclose` event on the client, triggering destruction!
+            return ws.terminate();
+        }
+        
+        ws.isAlive = false; // Reset to false until next ping
+    });
+}, 5500);
+
+wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+});
+
+server.listen(PORT, () => {
     console.log('');
-    console.log('🏰 BUILDHAUS API Server v2.0');
+    console.log('🏰 BUILDHAUS/CampusBuilder API & WS Server v2.1');
     console.log('─────────────────────────────────────');
-    console.log(`📡 Running at:  http://localhost:${PORT}`);
+    console.log(`📡 HTTP & WS Running at:  http://localhost:${PORT}`);
     console.log(`🔗 Health:      http://localhost:${PORT}/api/health`);
     console.log(`👤 Auth:        http://localhost:${PORT}/api/auth`);
     console.log(`⏱️  Sessions:    http://localhost:${PORT}/api/sessions`);
@@ -118,6 +156,7 @@ const db = require('./database');
 
 const shutdown = (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
+    clearInterval(heartbeatInterval);
     server.close(() => {
         db.close();
         console.log('Database connection closed. Goodbye!');

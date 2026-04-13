@@ -39,7 +39,50 @@ const App = () => {
     const [interruptionDetected, setInterruptionDetected] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // Detect interruptions (touch/click events during focus)
+    // ─── WebSocket Heartbeat System (FR04, FR05, FR06) ────────────────────────
+    useEffect(() => {
+        let ws = null;
+        let heartbeatInterval = null;
+        let isNaturalCleanup = false;
+
+        if (timer.isActive && !timer.isPaused) {
+            // Automatically find the current host
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // In dev mode on port 3000, we proxy or connect to API port 3001 if needed.
+            // Since we serve everything on 3001 now, host is mostly correct.
+            const wsUrl = window.location.port === '3000' 
+                ? `${protocol}//window.location.hostname:3001`
+                : `${protocol}//${window.location.host}`;
+                
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WebSocket heartbeat started');
+                // Send a pulse every 5 seconds
+                heartbeatInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'heartbeat' }));
+                    }
+                }, 5000);
+            };
+
+            ws.onclose = () => {
+                if (isNaturalCleanup) return;
+                console.log('WebSocket missed heartbeats / disconnected - Interruption detected!');
+                setInterruptionDetected(true);
+                timer.interrupt();
+                gameState.triggerDemolition();
+            };
+        }
+
+        return () => {
+            isNaturalCleanup = true;
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (ws) ws.close();
+        };
+    }, [timer.isActive, timer.isPaused]);
+
+    // Detect surface interruptions (touch/click events during focus)
     useEffect(() => {
         const handleInterruption = (e) => {
             if (timer.isActive && !timer.isPaused) {
