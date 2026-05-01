@@ -4,6 +4,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../database');
+const AppError = require('../utils/AppError');
 const { authenticate } = require('../middleware/auth');
 const { requireFields, validateEmail, validateFaculty, authLimiter } = require('../middleware/validate');
 
@@ -27,7 +28,7 @@ router.post(
     '/register',
     authLimiter,
     requireFields(['name', 'email', 'password', 'faculty']),
-    async (req, res) => {
+    async (req, res, next) => {
         try {
             const { name, email, password, faculty, student_no } = req.body;
 
@@ -56,7 +57,7 @@ router.post(
             // Check if email already in use
             const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
             if (existing) {
-                return res.status(409).json({ error: 'An account with this email already exists.' });
+                throw new AppError('An account with this email already exists.', 409);
             }
 
             // Hash password
@@ -82,8 +83,7 @@ router.post(
                 user
             });
         } catch (err) {
-            console.error('Register error:', err);
-            res.status(500).json({ error: 'Server error during registration.' });
+            next(err);
         }
     }
 );
@@ -93,7 +93,7 @@ router.post(
     '/login',
     authLimiter,
     requireFields(['email', 'password']),
-    async (req, res) => {
+    async (req, res, next) => {
         try {
             const { email, password } = req.body;
 
@@ -103,12 +103,12 @@ router.post(
 
             const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
             if (!user) {
-                return res.status(401).json({ error: 'Invalid email or password.' });
+                throw new AppError('Invalid email or password.', 401);
             }
 
             const valid = await bcrypt.compare(password, user.password);
             if (!valid) {
-                return res.status(401).json({ error: 'Invalid email or password.' });
+                throw new AppError('Invalid email or password.', 401);
             }
 
             const token = generateToken(user);
@@ -123,14 +123,13 @@ router.post(
                 ownedItems: ownedItems.map(r => r.item_id)
             });
         } catch (err) {
-            console.error('Login error:', err);
-            res.status(500).json({ error: 'Server error during login.' });
+            next(err);
         }
     }
 );
 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
-router.get('/me', authenticate, (req, res) => {
+router.get('/me', authenticate, (req, res, next) => {
     try {
         const user = db.prepare(`
             SELECT id, name, email, faculty, student_no, gender, coins, streak,
@@ -138,7 +137,7 @@ router.get('/me', authenticate, (req, res) => {
             FROM users WHERE id = ?
         `).get(req.user.id);
 
-        if (!user) return res.status(404).json({ error: 'User not found.' });
+        if (!user) throw new AppError('User not found.', 404);
 
         const ownedItems = db.prepare('SELECT item_id FROM user_items WHERE user_id = ?').all(user.id);
         const achievements = db.prepare('SELECT achievement_id, unlocked_at FROM achievements WHERE user_id = ?').all(user.id);
@@ -149,8 +148,7 @@ router.get('/me', authenticate, (req, res) => {
             achievements
         });
     } catch (err) {
-        console.error('Profile fetch error:', err);
-        res.status(500).json({ error: 'Server error fetching profile.' });
+        next(err);
     }
 });
 

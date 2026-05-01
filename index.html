@@ -187,10 +187,32 @@
             console.error('Error rendering App:', error);
         }
 
+        // Override feather.replace to prevent tearing React's virtual DOM
+        const safeFeatherReplace = () => {
+            if (!window.feather) return;
+            document.querySelectorAll('i[data-feather]').forEach(el => {
+                if (el.hasAttribute('data-replaced')) return;
+                const name = el.getAttribute('data-feather');
+                if (window.feather.icons[name]) {
+                    const attrs = {};
+                    if (el.style.width) attrs.width = el.style.width;
+                    if (el.style.height) attrs.height = el.style.height;
+                    if (el.style.color) attrs.color = el.style.color;
+                    
+                    el.innerHTML = window.feather.icons[name].toSvg(attrs);
+                    el.setAttribute('data-replaced', 'true');
+                    el.style.display = 'inline-flex';
+                    el.style.alignItems = 'center';
+                    el.style.justifyContent = 'center';
+                }
+            });
+        };
+        window.feather.replace = safeFeatherReplace;
+
         // Initialize Feather icons
         setTimeout(() => {
-            feather.replace();
-            console.log('Feather icons initialized');
+            safeFeatherReplace();
+            console.log('Feather icons safely initialized');
         }, 100);
     </script>
 </body>

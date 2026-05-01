@@ -34,9 +34,7 @@ const ProfilePanel = ({ gameState, rewards }) => {
                 <h2>Builder Profile</h2>
                 <button
                     onClick={() => {
-                        if (confirm('Are you sure you want to log out?')) {
-                            gameState.logout();
-                        }
+                        gameState.logout();
                     }}
                     style={{
                         background: 'transparent',

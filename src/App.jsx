@@ -51,7 +51,7 @@ const App = () => {
             // In dev mode on port 3000, we proxy or connect to API port 3001 if needed.
             // Since we serve everything on 3001 now, host is mostly correct.
             const wsUrl = window.location.port === '3000' 
-                ? `${protocol}//window.location.hostname:3001`
+                ? `${protocol}//${window.location.hostname}:3001`
                 : `${protocol}//${window.location.host}`;
                 
             ws = new WebSocket(wsUrl);

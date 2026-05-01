@@ -14,12 +14,18 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
         const loadCommunityData = async () => {
             try {
                 if (!gameState?.token) return;
+                setLoading(true);
                 const [summaryRes, globalRes] = await Promise.all([
                     window.api.leaderboard.getSummary(),
                     window.api.leaderboard.getGlobal()
                 ]);
                 setGlobalStats(summaryRes);
                 setGlobalLeaderboard(globalRes.leaderboard);
+                
+                // Refresh local faculty and interfaculty data as well
+                if (faculty?.refreshLeaderboards) {
+                    faculty.refreshLeaderboards();
+                }
             } catch (err) {
                 console.error("Failed to load community data", err);
             } finally {
@@ -27,7 +33,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
             }
         };
         loadCommunityData();
-    }, [gameState?.token]);
+    }, [gameState?.token, activeTab]);
 
     const getStreakColor = (streak) => {
         if (streak >= 30) return "#FF6B35";
@@ -155,7 +161,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
                                     <h3 style={{ margin: '0 0 8px 0', fontSize: '1.4em' }}>{faculty?.userFacultyInfo?.name || gameState.faculty}</h3>
                                     <div style={{ display: 'flex', gap: '16px', fontSize: '0.9em', opacity: 0.9 }}>
                                         <span><i data-feather="users" style={{ width: '14px', height: '14px', verticalAlign: 'middle', marginRight: '4px' }}></i>
-                                            {faculty?.userFacultyLeaderboard?.length || 0} Members</span>
+                                            {faculty?.facultyLeaderboard?.length || 0} Members</span>
                                     </div>
                                 </div>
                             </div>
@@ -165,8 +171,8 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
                                 <div className="leaderboard-list">
                                     {faculty?.loading ? (
                                         <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading faculty data...</p>
-                                    ) : faculty?.userFacultyLeaderboard && faculty.userFacultyLeaderboard.length > 0 ? (
-                                        faculty.userFacultyLeaderboard.map((member, index) => (
+                                    ) : faculty?.facultyLeaderboard && faculty.facultyLeaderboard.length > 0 ? (
+                                        faculty.facultyLeaderboard.map((member, index) => (
                                             <div key={member.id} className={`leaderboard-item ${member.isCurrentUser ? 'current-user' : ''}`}>
                                                 <div className="rank">{getRankEmoji(index)}</div>
                                                 <div className="player-info">
@@ -205,9 +211,9 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
                                 <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading campus rankings...</p>
                             ) : faculty?.interfacultyRankings && faculty.interfacultyRankings.length > 0 ? (
                                 faculty.interfacultyRankings.map((fac, index) => {
-                                    const isUserFaculty = fac.facultyId === gameState.faculty;
+                                    const isUserFaculty = fac.faculty === gameState.faculty;
                                     return (
-                                        <div key={fac.facultyId} className={`leaderboard-item ${isUserFaculty ? 'current-user' : ''}`} style={{ padding: '16px' }}>
+                                        <div key={fac.faculty} className={`leaderboard-item ${isUserFaculty ? 'current-user' : ''}`} style={{ padding: '16px' }}>
                                             <div className="rank" style={{ fontSize: '1.4em', width: '40px' }}>{getRankEmoji(index)}</div>
 
                                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>

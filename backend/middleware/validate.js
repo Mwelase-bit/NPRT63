@@ -91,8 +91,8 @@ const createRateLimiter = (maxRequests = 20, windowMs = 60_000) => {
 };
 
 // Preset limiters
-const authLimiter = createRateLimiter(10, 60_000);   // 10 auth attempts/min
-const generalLimiter = createRateLimiter(60, 60_000);   // 60 general requests/min
+const authLimiter = createRateLimiter(100, 60_000);   // 100 auth attempts/min
+const generalLimiter = createRateLimiter(500, 60_000);   // 500 general requests/min
 
 module.exports = {
     requireFields,

@@ -3,6 +3,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
@@ -20,12 +21,17 @@ const achievementRoutes = require('./routes/achievements');
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
 const { sanitiseBody, generalLimiter } = require('./middleware/validate');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Global Middleware ────────────────────────────────────────────────────────
 const isProduction = process.env.NODE_ENV === 'production';
+// app.use(helmet({
+//     contentSecurityPolicy: false,
+//     crossOriginEmbedderPolicy: false
+// }));
 app.use(cors()); // Allow all origins (tighten in production if needed)
 app.use(express.json({ limit: '2mb' }));
 app.use(sanitiseBody);       // Trim all incoming string fields
@@ -93,11 +99,7 @@ app.use((req, res) => {
 });
 
 // ─── Global error handler ─────────────────────────────────────────────────────
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'An unexpected server error occurred.' });
-});
+app.use(errorHandler);
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 const server = http.createServer(app);
