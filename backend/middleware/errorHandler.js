@@ -38,7 +38,7 @@ const errorHandler = (err, req, res, next) => {
     console.error('ERROR 💥', err);
     res.status(500).json({
         status: 'error',
-        error: 'Something went very wrong!'
+        error: `System Error: ${err.message}`
     });
 };
 
