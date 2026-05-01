@@ -1,7 +1,7 @@
 // middleware/auth.js — JWT authentication middleware
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_render_123';
 
 const authenticate = (req, res, next) => {
     const authHeader = req.headers.authorization;

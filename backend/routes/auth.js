@@ -8,7 +8,7 @@ const AppError = require('../utils/AppError');
 const { authenticate } = require('../middleware/auth');
 const { requireFields, validateEmail, validateFaculty, authLimiter } = require('../middleware/validate');
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_render_123';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const generateToken = (user) =>
