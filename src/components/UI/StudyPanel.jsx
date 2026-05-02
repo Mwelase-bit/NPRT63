@@ -165,14 +165,13 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
             {/* Toast */}
             {toastMsg && (
                 <div className="study-toast">
-                    <span>✨</span> {toastMsg}
+                    {toastMsg}
                 </div>
             )}
 
             {/* Header */}
             <div className="study-header">
                 <div className="study-header-left">
-                    <span className="study-icon">🧠</span>
                     <div>
                         <h2 className="study-title">AI Study</h2>
                         <p className="study-subtitle">Flashcards powered by LLaMA 3</p>
@@ -190,7 +189,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     className={`study-tab ${view === 'library'  ? 'active' : ''}`}
                     onClick={() => setView('library')}
                 >
-                    📚 Library
+                    Library
                 </button>
                 <button
                     className={`study-tab ${view === 'generate' ? 'active' : ''}`}
@@ -199,7 +198,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     ✨ Generate
                 </button>
                 {view === 'study' && (
-                    <button className="study-tab active">🎴 Study</button>
+                    <button className="study-tab active">Study</button>
                 )}
             </div>
 
@@ -213,7 +212,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         </div>
                     ) : sets.length === 0 ? (
                         <div className="study-empty">
-                            <div className="study-empty-icon">🎴</div>
+                            <div className="study-empty-icon study-empty-icon-text">[ ]</div>
                             <h3>No flashcard sets yet</h3>
                             <p>Paste your lecture notes and let AI do the hard work!</p>
                             <button className="btn-study-primary" onClick={() => setView('generate')}>
@@ -234,8 +233,8 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                         <div className="study-set-subject">{s.subject}</div>
                                         <div className="study-set-title">{s.title}</div>
                                         <div className="study-set-meta">
-                                            <span>🎴 {s.cardCount} cards</span>
-                                            <span>📅 {fmtDate(s.createdAt)}</span>
+                                            <span>{s.cardCount} cards</span>
+                                            <span>{fmtDate(s.createdAt)}</span>
                                         </div>
                                         <div className="study-set-footer">
                                             <span className="study-set-coins">+{s.coinsEarned} coins earned</span>
@@ -243,7 +242,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                                 className="study-set-delete"
                                                 onClick={(e) => deleteSet(s.id, e)}
                                                 title="Delete set"
-                                            >🗑️</button>
+                                            >✕</button>
                                         </div>
                                     </div>
                                 ))}
@@ -398,7 +397,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                     className="study-flip-btn"
                                     onClick={() => setFlipped(f => !f)}
                                 >
-                                    {flipped ? '🙈 Hide Answer' : '👁 Reveal Answer'}
+                                    {flipped ? 'Hide Answer' : 'Reveal Answer'}
                                 </button>
                                 <button
                                     className="study-nav-btn"
@@ -416,9 +415,9 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             {/* Completion banner */}
                             {cardIndex === totalCards - 1 && (
                                 <div className="study-complete-banner">
-                                    🎉 You've reviewed all {totalCards} cards!
+                                    You've reviewed all {totalCards} cards!
                                     <button className="study-restart-btn" onClick={() => { setCardIndex(0); setFlipped(false); }}>
-                                        🔄 Restart
+                                        Restart
                                     </button>
                                 </div>
                             )}

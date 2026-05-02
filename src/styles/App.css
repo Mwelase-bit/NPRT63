@@ -2979,6 +2979,13 @@ body {
     padding: 40px 20px;
 }
 .study-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.study-empty-icon-text {
+    font-size: 36px;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: 4px;
+    font-family: monospace;
+}
 .study-empty h3 { color: #e2e8f0; margin-bottom: 8px; font-size: 18px; }
 .study-empty p  { color: #64748b; font-size: 14px; margin-bottom: 20px; }
 
