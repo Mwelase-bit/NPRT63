@@ -12,6 +12,7 @@ const CommunityPanel = window.CommunityPanel;
 const ShopPanel = window.ShopPanel;
 const GameScene = window.GameScene;
 const RegistrationModal = window.RegistrationModal;
+const StudyPanel = window.StudyPanel;
 const ErrorBoundary = ({ children, fallback }) => {
     const [hasError, setHasError] = useState(false);
 
@@ -349,6 +350,15 @@ const App = () => {
                             <i data-feather="shopping-bag"></i>
                             Shop
                         </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'study' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('study');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            🧠 Study AI
+                        </button>
                     </div>
 
                     <div className="panel-content">
@@ -385,10 +395,16 @@ const App = () => {
                                 rewards={rewards}
                             />
                         )}
+                        {activePanel === 'study' && (
+                            <StudyPanel
+                                currentUser={gameState.token ? { token: gameState.token } : null}
+                                apiBase={window.API_BASE || ''}
+                            />
+                        )}
                     </div>
                 </div>
             ) : (
-                // Timer only at the bottom when session is active, left aligned
+                // Timer is active — show timer bottom-left + Study panel bottom-right
                 <div style={{
                     position: 'absolute',
                     bottom: 0,
@@ -396,16 +412,23 @@ const App = () => {
                     width: '100%',
                     zIndex: 200,
                     display: 'flex',
-                    justifyContent: 'flex-start',
-                    pointerEvents: 'auto'
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-end',
+                    pointerEvents: 'auto',
+                    padding: '0 18px 18px 18px',
+                    gap: '16px'
                 }}>
-                    <div style={{
-                        marginLeft: '18px', // add some left margin
-                    }}>
-                        <TimerPanel
-                            timer={timer}
-                            onStartSession={startFocusSession}
-                            gameState={gameState}
+                    {/* Timer — left side */}
+                    <TimerPanel
+                        timer={timer}
+                        onStartSession={startFocusSession}
+                        gameState={gameState}
+                    />
+                    {/* Study AI — right side, runs alongside timer without interrupting */}
+                    <div className="study-panel-float">
+                        <StudyPanel
+                            currentUser={gameState.token ? { token: gameState.token } : null}
+                            apiBase={window.API_BASE || ''}
                         />
                     </div>
                 </div>

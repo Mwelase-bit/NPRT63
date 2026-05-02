@@ -18,6 +18,7 @@ const sessionRoutes = require('./routes/sessions');
 const leaderboardRoutes = require('./routes/leaderboard');
 const shopRoutes = require('./routes/shop');
 const achievementRoutes = require('./routes/achievements');
+const aiRoutes          = require('./routes/ai');
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
 const { sanitiseBody, generalLimiter } = require('./middleware/validate');
@@ -59,6 +60,7 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/achievements', achievementRoutes);
+app.use('/api/ai',           aiRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -85,7 +87,11 @@ app.get('/api/health', (req, res) => {
             'POST   /api/shop/buy',
             'GET    /api/shop/owned',
             'GET    /api/achievements',
-            'POST   /api/achievements/unlock'
+            'POST   /api/achievements/unlock',
+            'POST   /api/ai/flashcards',
+            'GET    /api/ai/flashcards',
+            'GET    /api/ai/flashcards/:setId',
+            'DELETE /api/ai/flashcards/:setId'
         ]
     });
 });
@@ -149,6 +155,7 @@ server.listen(PORT, () => {
     console.log(`🏆 Leaderboard: http://localhost:${PORT}/api/leaderboard`);
     console.log(`🛒 Shop:        http://localhost:${PORT}/api/shop`);
     console.log(`🎖️  Achievements: http://localhost:${PORT}/api/achievements`);
+    console.log(`🤖 AI Study:     http://localhost:${PORT}/api/ai/flashcards`);
     console.log('─────────────────────────────────────');
     console.log('');
 });

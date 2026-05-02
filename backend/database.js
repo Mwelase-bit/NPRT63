@@ -70,6 +70,28 @@ db.exec(`
     purchased_at TEXT   DEFAULT (datetime('now')),
     UNIQUE(user_id, item_id)
   );
+
+  -- AI Study: flashcard sets generated from pasted content
+  CREATE TABLE IF NOT EXISTS flashcard_sets (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title        TEXT    NOT NULL,
+    subject      TEXT    NOT NULL DEFAULT 'General',
+    source_text  TEXT    NOT NULL,
+    card_count   INTEGER NOT NULL DEFAULT 0,
+    coins_earned INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT    DEFAULT (datetime('now'))
+  );
+
+  -- AI Study: individual flashcards belonging to a set
+  CREATE TABLE IF NOT EXISTS flashcards (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_id   INTEGER NOT NULL REFERENCES flashcard_sets(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    front    TEXT NOT NULL,
+    back     TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 // ─── Create Indexes for performance ──────────────────────────────────────────
@@ -86,6 +108,10 @@ db.exec(`
     ON users(faculty);
   CREATE INDEX IF NOT EXISTS idx_users_total_focus
     ON users(total_focus_sec DESC);
+  CREATE INDEX IF NOT EXISTS idx_flashcard_sets_user
+    ON flashcard_sets(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_flashcards_set
+    ON flashcards(set_id, position);
 `);
 
 
