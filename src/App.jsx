@@ -96,8 +96,13 @@ const App = () => {
                     target.closest('.timer-controls') ||
                     target.closest('button') ||
                     target.closest('input') ||
+                    target.closest('textarea') ||
                     target.closest('label') ||
-                    target.closest('.mobile-menu-toggle');
+                    target.closest('.mobile-menu-toggle') ||
+                    // Study AI panel — never interrupt the focus session
+                    target.closest('.study-panel') ||
+                    target.closest('.study-panel-float') ||
+                    target.closest('.flashcard-container');
 
                 if (!isUIElement) {
                     console.log('Interruption detected - demolishing house');
