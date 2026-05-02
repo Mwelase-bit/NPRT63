@@ -29,7 +29,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
 
     // ─── Auth header ──────────────────────────────────────────────────────────
     const authHeaders = useCallback(() => {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('buildersFocus_token');
         return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
     }, []);
 
