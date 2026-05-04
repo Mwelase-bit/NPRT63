@@ -11,3 +11,5 @@ services:
         generateValue: true
       - key: DB_PATH
         value: /opt/render/project/src/buildhaus.db
+      - key: GROQ_API_KEY
+        sync: false

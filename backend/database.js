@@ -141,6 +141,31 @@ try {
   if (!e.message.includes('duplicate column name')) throw e;
 }
 
+// ─── One-time user reset (v2 fresh-start) ────────────────────────────────────
+// Creates a control table on first run. If it doesn't exist yet, all user data
+// is wiped so everyone must re-register. Safe to leave in permanently.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS db_flags (
+    flag TEXT PRIMARY KEY,
+    value TEXT
+  );
+`);
+
+const freshStartDone = db.prepare("SELECT value FROM db_flags WHERE flag = 'v2_fresh_start'").get();
+if (!freshStartDone) {
+  console.log('🗑️  Running v2 fresh-start: clearing all user data...');
+  db.exec(`
+    DELETE FROM flashcards;
+    DELETE FROM flashcard_sets;
+    DELETE FROM achievements;
+    DELETE FROM user_items;
+    DELETE FROM focus_sessions;
+    DELETE FROM users;
+  `);
+  db.prepare("INSERT INTO db_flags (flag, value) VALUES ('v2_fresh_start', datetime('now'))").run();
+  console.log('✅ Fresh-start complete. All users cleared — please re-register.');
+}
+
 // ─── Seed Shop Items (run only once) ─────────────────────────────────────────
 
 const seedShopItems = db.transaction(() => {

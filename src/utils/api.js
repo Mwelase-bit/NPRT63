@@ -107,3 +107,6 @@ const api = {
 };
 
 window.api = api;
+
+// Expose base URL so other components (e.g. StudyPanel) can point to the correct backend
+window.API_BASE = API_BASE_URL.replace('/api', '');
