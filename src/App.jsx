@@ -59,12 +59,12 @@ const App = () => {
 
             ws.onopen = () => {
                 console.log('WebSocket heartbeat started');
-                // Send a pulse every 5 seconds
+                // Send a pulse every 4 seconds — well within the 15s server window
                 heartbeatInterval = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: 'heartbeat' }));
                     }
-                }, 5000);
+                }, 4000);
             };
 
             ws.onclose = () => {

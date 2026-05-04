@@ -127,18 +127,19 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Check all clients every 5.5 seconds (allowing 5s interval + slight payload delay)
+// Check all clients every 15 seconds.
+// Client sends a heartbeat every 4s, so the 11s margin prevents false
+// demolitions caused by slow AI API calls or browser event-loop pressure.
 const heartbeatInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
-            // Client missed 2 continuous heartbeats -> terminate connection!
-            // This will instantly fire the `onclose` event on the client, triggering destruction!
+            // Client missed multiple heartbeats — genuine absence detected.
+            // Terminates the WS, firing onclose on the client → demolition.
             return ws.terminate();
         }
-        
-        ws.isAlive = false; // Reset to false until next ping
+        ws.isAlive = false; // Reset to false until next pulse
     });
-}, 5500);
+}, 15000);
 
 wss.on('close', () => {
     clearInterval(heartbeatInterval);
