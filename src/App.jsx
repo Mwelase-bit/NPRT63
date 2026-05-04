@@ -83,44 +83,32 @@ const App = () => {
         };
     }, [timer.isActive, timer.isPaused]);
 
-    // Detect surface interruptions (touch/click events during focus)
+    // Detect interruptions: only watch the 3D game canvas.
+    // Clicking the 3D world during a session = distraction → demolish.
+    // Clicking any UI panel (Study AI, timer controls, etc.) is NEVER an interruption
+    // because those listeners never fire — no fragile whitelist needed.
     useEffect(() => {
-        const handleInterruption = (e) => {
+        const handleCanvasInterruption = () => {
             if (timer.isActive && !timer.isPaused) {
-                // Check if the interaction is with UI elements (don't interrupt)
-                const target = e.target;
-                const isUIElement = target.closest('.timer-panel') ||
-                    target.closest('.ui-overlay') ||
-                    target.closest('.nav-tabs') ||
-                    target.closest('.panel-content') ||
-                    target.closest('.timer-controls') ||
-                    target.closest('button') ||
-                    target.closest('input') ||
-                    target.closest('textarea') ||
-                    target.closest('label') ||
-                    target.closest('.mobile-menu-toggle') ||
-                    // Study AI panel — never interrupt the focus session
-                    target.closest('.study-panel') ||
-                    target.closest('.study-panel-float') ||
-                    target.closest('.flashcard-container');
-
-                if (!isUIElement) {
-                    console.log('Interruption detected - demolishing house');
-                    setInterruptionDetected(true);
-                    timer.interrupt();
-                    gameState.triggerDemolition();
-                }
+                console.log('Game canvas clicked during focus — interruption!');
+                setInterruptionDetected(true);
+                timer.interrupt();
+                gameState.triggerDemolition();
             }
         };
 
-        if (timer.isActive && !timer.isPaused) {
-            document.addEventListener('touchstart', handleInterruption);
-            document.addEventListener('click', handleInterruption);
+        const gameCanvas = document.querySelector('.game-canvas');
+
+        if (timer.isActive && !timer.isPaused && gameCanvas) {
+            gameCanvas.addEventListener('click', handleCanvasInterruption);
+            gameCanvas.addEventListener('touchstart', handleCanvasInterruption);
         }
 
         return () => {
-            document.removeEventListener('touchstart', handleInterruption);
-            document.removeEventListener('click', handleInterruption);
+            if (gameCanvas) {
+                gameCanvas.removeEventListener('click', handleCanvasInterruption);
+                gameCanvas.removeEventListener('touchstart', handleCanvasInterruption);
+            }
         };
     }, [timer.isActive, timer.isPaused]);
 
