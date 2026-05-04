@@ -83,34 +83,9 @@ const App = () => {
         };
     }, [timer.isActive, timer.isPaused]);
 
-    // Detect interruptions: only watch the 3D game canvas.
-    // Clicking the 3D world during a session = distraction → demolish.
-    // Clicking any UI panel (Study AI, timer controls, etc.) is NEVER an interruption
-    // because those listeners never fire — no fragile whitelist needed.
-    useEffect(() => {
-        const handleCanvasInterruption = () => {
-            if (timer.isActive && !timer.isPaused) {
-                console.log('Game canvas clicked during focus — interruption!');
-                setInterruptionDetected(true);
-                timer.interrupt();
-                gameState.triggerDemolition();
-            }
-        };
-
-        const gameCanvas = document.querySelector('.game-canvas');
-
-        if (timer.isActive && !timer.isPaused && gameCanvas) {
-            gameCanvas.addEventListener('click', handleCanvasInterruption);
-            gameCanvas.addEventListener('touchstart', handleCanvasInterruption);
-        }
-
-        return () => {
-            if (gameCanvas) {
-                gameCanvas.removeEventListener('click', handleCanvasInterruption);
-                gameCanvas.removeEventListener('touchstart', handleCanvasInterruption);
-            }
-        };
-    }, [timer.isActive, timer.isPaused]);
+    // Click-based interruption detection has been removed.
+    // The only way the house is demolished is if the user switches browser tabs
+    // (detected via WebSocket heartbeat failure after ~15 seconds).
 
     // Request notification permission after login/registration
     useEffect(() => {
