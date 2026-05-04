@@ -40,52 +40,26 @@ const App = () => {
     const [interruptionDetected, setInterruptionDetected] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // ─── WebSocket Heartbeat System (FR04, FR05, FR06) ────────────────────────
+    // ─── Tab-switch interruption detection (Visibility API) ──────────────────
+    // Fires instantly & reliably when the user leaves the tab — no WebSocket
+    // timing issues, no network dependency, no false positives.
     useEffect(() => {
-        let ws = null;
-        let heartbeatInterval = null;
-        let isNaturalCleanup = false;
+        if (!timer.isActive || timer.isPaused) return;
 
-        if (timer.isActive && !timer.isPaused) {
-            // Automatically find the current host
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            // In dev mode on port 3000, we proxy or connect to API port 3001 if needed.
-            // Since we serve everything on 3001 now, host is mostly correct.
-            const wsUrl = window.location.port === '3000' 
-                ? `${protocol}//${window.location.hostname}:3001`
-                : `${protocol}//${window.location.host}`;
-                
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                console.log('WebSocket heartbeat started');
-                // Send a pulse every 4 seconds — well within the 15s server window
-                heartbeatInterval = setInterval(() => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'heartbeat' }));
-                    }
-                }, 4000);
-            };
-
-            ws.onclose = () => {
-                if (isNaturalCleanup) return;
-                console.log('WebSocket missed heartbeats / disconnected - Interruption detected!');
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                console.log('Tab hidden during focus session — interruption!');
                 setInterruptionDetected(true);
                 timer.interrupt();
                 gameState.triggerDemolition();
-            };
-        }
+            }
+        };
 
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => {
-            isNaturalCleanup = true;
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            if (ws) ws.close();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [timer.isActive, timer.isPaused]);
-
-    // Click-based interruption detection has been removed.
-    // The only way the house is demolished is if the user switches browser tabs
-    // (detected via WebSocket heartbeat failure after ~15 seconds).
 
     // Request notification permission after login/registration
     useEffect(() => {
