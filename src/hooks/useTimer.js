@@ -84,11 +84,8 @@ const useTimer = () => {
     };
     
     const interrupt = () => {
-        setTimer(prev => ({
-            ...prev,
-            isActive: false,
-            isPaused: false
-        }));
+        // Disabled: session can only end via Stop button or natural completion.
+        // Keeping as no-op so old/cached callers cannot accidentally kill the session.
     };
     
     const reset = () => {

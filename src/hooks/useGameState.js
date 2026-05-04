@@ -94,20 +94,8 @@ const useGameState = () => {
     };
 
     const triggerDemolition = () => {
-        setGameState(prev => ({
-            ...prev,
-            isCollapsing: true,
-            isBuilding: false
-        }));
-
-        // Reset after demolition animation
-        setTimeout(() => {
-            setGameState(prev => ({
-                ...prev,
-                isCollapsing: false,
-                buildStage: 1  // Reset to foundation (stage 1)
-            }));
-        }, 3000);
+        // Disabled: the house no longer collapses during a session.
+        // Session ends only via Stop button or natural timer completion.
     };
 
     const resetBuilding = () => {
