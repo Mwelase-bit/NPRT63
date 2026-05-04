@@ -40,26 +40,10 @@ const App = () => {
     const [interruptionDetected, setInterruptionDetected] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // ─── Tab-switch interruption detection (Visibility API) ──────────────────
-    // Fires instantly & reliably when the user leaves the tab — no WebSocket
-    // timing issues, no network dependency, no false positives.
-    useEffect(() => {
-        if (!timer.isActive || timer.isPaused) return;
-
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                console.log('Tab hidden during focus session — interruption!');
-                setInterruptionDetected(true);
-                timer.interrupt();
-                gameState.triggerDemolition();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, [timer.isActive, timer.isPaused]);
+    // All automated interruption detection has been removed.
+    // The focus session ends only when:
+    //   1. The timer naturally completes ✅
+    //   2. The user clicks "Stop Session" ✅
 
     // Request notification permission after login/registration
     useEffect(() => {
