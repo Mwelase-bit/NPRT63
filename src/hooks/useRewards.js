@@ -215,7 +215,9 @@ const useRewards = (gameState, timer) => {
                 successRate: Math.floor((newCompleted / Math.max(newTotal, 1)) * 100),
                 completedSessions: newCompleted,
                 failedSessions: newFailed,
-                housesBuilt: prev.housesBuilt + (completed ? 1 : 0),
+                // housesBuilt is NOT incremented here — the backend does it via
+                // sessions.js (houses_built + 1) and syncWithBackend() pulls the
+                // authoritative value back. Incrementing here too caused a double-count.
                 dailyStats: {
                     ...prev.dailyStats,
                     sessionsToday: prev.dailyStats.sessionsToday + 1,

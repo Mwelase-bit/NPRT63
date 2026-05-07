@@ -41,6 +41,10 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
     };
 
     // ─── Load saved sets ──────────────────────────────────────────────────────
+    // Use a ref for the token so loadSets doesn't need authHeaders in its
+    // dependency array — prevents re-firing on every parent re-render (timer tick).
+    const hasLoadedRef = useRef(false);
+
     const loadSets = useCallback(async () => {
         setLoadingSets(true);
         try {
@@ -52,10 +56,14 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
         } finally {
             setLoadingSets(false);
         }
-    }, [apiBase, authHeaders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [apiBase]); // intentionally exclude authHeaders — it reads localStorage directly
 
     useEffect(() => {
-        if (currentUser) loadSets();
+        if (currentUser && !hasLoadedRef.current) {
+            hasLoadedRef.current = true;
+            loadSets();
+        }
     }, [currentUser, loadSets]);
 
     // ─── Generate flashcards ──────────────────────────────────────────────────

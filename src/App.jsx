@@ -68,17 +68,23 @@ const App = () => {
         }
     }, [timer.isActive, gameState.isBuilding]);
 
-    // Automatically progress building stages
+    // Automatically progress building stages based on ABSOLUTE elapsed time,
+    // not percentage — so a 5-min session stays at Stage 1 while a 2-hr session
+    // reaches Stage 4. This makes visual progress reflect real effort.
+    //   Stage 1 (foundation) : session starts
+    //   Stage 2 (walls)      : 15 minutes elapsed
+    //   Stage 3 (roof)       : 30 minutes elapsed
+    //   Stage 4 (complete)   : 45 minutes elapsed
     useEffect(() => {
         if (timer.isActive && timer.duration > 0) {
-            const progress = (timer.duration - timer.timeLeft) / timer.duration;
+            const elapsedSeconds = timer.duration - timer.timeLeft;
             let nextStage = 1;
 
-            if (progress >= 0.75) {
+            if (elapsedSeconds >= 45 * 60) {       // 45 min
                 nextStage = 4;
-            } else if (progress >= 0.5) {
+            } else if (elapsedSeconds >= 30 * 60) { // 30 min
                 nextStage = 3;
-            } else if (progress >= 0.25) {
+            } else if (elapsedSeconds >= 15 * 60) { // 15 min
                 nextStage = 2;
             }
 
@@ -96,9 +102,16 @@ const App = () => {
     }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState]);
 
     // Handle timer completion
+    // A house is only BUILT if the session was ≥ 45 minutes — matching Stage 4.
+    // Shorter sessions still award coins and update streak, but don't add a village house.
+    const MIN_HOUSE_SECONDS = 45 * 60; // 2700 s
     useEffect(() => {
         if (timer.isCompleted) {
-            gameState.completeBuilding();
+            const housEarned = timer.duration >= MIN_HOUSE_SECONDS;
+
+            if (housEarned) {
+                gameState.completeBuilding(); // adds to village
+            }
             rewards.awardCoins(timer.duration);
             rewards.updateStreak();
 
@@ -112,8 +125,11 @@ const App = () => {
                 window.NotificationManager.sessionComplete(timer.duration);
             }
 
-            // Sync completed session to backend
-            syncSessionToBackend(timer.duration, timer.duration, true);
+            // Sync completed session to backend (backend also gates houses_built on 45 min)
+            // then re-read authoritative stats as the single source of truth.
+            syncSessionToBackend(timer.duration, timer.duration, true).then(() => {
+                rewards.syncWithBackend();
+            });
 
             // Sync new achievements unlocked from this session
             rewards.allAchievements

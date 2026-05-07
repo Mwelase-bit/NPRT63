@@ -52,15 +52,20 @@ router.post('/', authenticate, (req, res) => {
             }
             // else: already focused today, streak unchanged
 
+            // A house is only built if the session was ≥ 45 minutes.
+            // Shorter sessions award coins and streak but don't add a village house.
+            const MIN_HOUSE_SECONDS = 45 * 60; // 2700 s
+            const houseIncrement = elapsed >= MIN_HOUSE_SECONDS ? 1 : 0;
+
             db.prepare(`
                 UPDATE users
                 SET coins           = coins + ?,
                     streak          = ?,
                     last_focus_date = ?,
-                    houses_built    = houses_built + 1,
+                    houses_built    = houses_built + ?,
                     total_focus_sec = total_focus_sec + ?
                 WHERE id = ?
-            `).run(coinsEarned, newStreak, today, elapsed, userId);
+            `).run(coinsEarned, newStreak, today, houseIncrement, elapsed, userId);
         }
 
         res.status(201).json({
