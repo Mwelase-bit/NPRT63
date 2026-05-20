@@ -92,6 +92,17 @@ db.exec(`
     back     TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0
   );
+
+  -- Quiz attempts: track each quiz taken by a user
+  CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    set_id       INTEGER NOT NULL REFERENCES flashcard_sets(id) ON DELETE CASCADE,
+    score        INTEGER NOT NULL DEFAULT 0,
+    total        INTEGER NOT NULL DEFAULT 0,
+    coins_earned INTEGER NOT NULL DEFAULT 0,
+    taken_at     TEXT    DEFAULT (datetime('now'))
+  );
 `);
 
 // ─── Create Indexes for performance ──────────────────────────────────────────
@@ -151,9 +162,9 @@ db.exec(`
   );
 `);
 
-const freshStartDone = db.prepare("SELECT value FROM db_flags WHERE flag = 'v2_fresh_start'").get();
+const freshStartDone = db.prepare("SELECT value FROM db_flags WHERE flag = 'v3_fresh_start'").get();
 if (!freshStartDone) {
-  console.log('🗑️  Running v2 fresh-start: clearing all user data...');
+  console.log('🗑️  Running v3 fresh-start: clearing all user data...');
   db.exec(`
     DELETE FROM flashcards;
     DELETE FROM flashcard_sets;
@@ -162,7 +173,7 @@ if (!freshStartDone) {
     DELETE FROM focus_sessions;
     DELETE FROM users;
   `);
-  db.prepare("INSERT INTO db_flags (flag, value) VALUES ('v2_fresh_start', datetime('now'))").run();
+  db.prepare("INSERT INTO db_flags (flag, value) VALUES ('v3_fresh_start', datetime('now'))").run();
   console.log('✅ Fresh-start complete. All users cleared — please re-register.');
 }
 

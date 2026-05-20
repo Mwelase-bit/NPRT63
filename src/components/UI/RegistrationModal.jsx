@@ -2,11 +2,14 @@ const { useState } = React;
 
 const RegistrationModal = ({ gameState }) => {
     const [mode, setMode] = useState('register'); // 'register' or 'login'
-    const [step, setStep] = useState(1); // step 1: name, step 2: faculty, step 3: credentials
+    const [step, setStep] = useState(1); // step 1: name, step 2: faculty, step 3: credentials, step 4: profile details
     const [name, setName] = useState('');
     const [selectedFaculty, setSelectedFaculty] = useState(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [gender, setGender] = useState('other');
+    const [studentNo, setStudentNo] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
@@ -30,7 +33,7 @@ const RegistrationModal = ({ gameState }) => {
         setStep(3);
     };
 
-    const handleRegister = async () => {
+    const handleCredentialsNext = () => {
         if (!email.trim() || !email.includes('@')) {
             setError('Please enter a valid email address.');
             return;
@@ -39,7 +42,15 @@ const RegistrationModal = ({ gameState }) => {
             setError('Password must be at least 6 characters.');
             return;
         }
+        if (password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        setError('');
+        setStep(4);
+    };
 
+    const handleRegister = async () => {
         setIsSubmitting(true);
         setError('');
 
@@ -48,7 +59,9 @@ const RegistrationModal = ({ gameState }) => {
                 name: name.trim(),
                 faculty: selectedFaculty,
                 email: email.trim(),
-                password: password
+                password: password,
+                gender: gender,
+                student_no: studentNo.trim() || null
             });
             // Success - modal will close
         } catch (err) {
@@ -110,7 +123,7 @@ const RegistrationModal = ({ gameState }) => {
                 {/* Step Indicator (Only for Register) */}
                 {mode === 'register' && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '30px' }}>
-                        {[1, 2, 3].map(s => (
+                        {[1, 2, 3, 4].map(s => (
                             <div key={s} style={{
                                 width: s === step ? '32px' : '10px',
                                 height: '10px',
@@ -226,14 +239,184 @@ const RegistrationModal = ({ gameState }) => {
                     </div>
                 )}
 
-                {(mode === 'login' || (mode === 'register' && step === 3)) && (
+                {mode === 'register' && step === 3 && (
                     <div>
-                        <h3 style={{ margin: '0 0 8px', fontSize: '1.1em' }}>
-                            {mode === 'login' ? 'Welcome back!' : 'Create your account'}
-                        </h3>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.1em' }}>Login Details</h3>
                         <p style={{ margin: '0 0 20px', opacity: 0.6, fontSize: '0.9em' }}>
-                            {mode === 'login' ? 'Enter your credentials to continue.' : 'Use your SPU email and a secure password.'}
+                            Use your SPU email and a secure password.
                         </p>
+
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '5px', display: 'block' }}>Email Address</label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => { setEmail(e.target.value); setError(''); }}
+                                placeholder="e.g. student@spu.ac.za"
+                                style={{
+                                    width: '100%', padding: '12px 14px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: 'white',
+                                    fontSize: '1em', boxSizing: 'border-box',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '5px', display: 'block' }}>Password</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={e => { setPassword(e.target.value); setError(''); }}
+                                placeholder="Min. 6 characters"
+                                style={{
+                                    width: '100%', padding: '12px 14px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: 'white',
+                                    fontSize: '1em', boxSizing: 'border-box',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '5px', display: 'block' }}>Confirm Password</label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
+                                placeholder="Must match password"
+                                style={{
+                                    width: '100%', padding: '12px 14px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: 'white',
+                                    fontSize: '1em', boxSizing: 'border-box',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        {error && <p style={{ color: '#ff6b6b', fontSize: '0.85em', margin: '0 0 15px', textAlign: 'center' }}>{error}</p>}
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => { setStep(2); setError(''); }}
+                                style={{
+                                    flex: '0 0 auto', padding: '14px 20px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    borderRadius: '10px', color: 'white',
+                                    cursor: 'pointer', fontSize: '1em'
+                                }}
+                            >
+                                ← Back
+                            </button>
+                            <button
+                                onClick={handleCredentialsNext}
+                                style={{
+                                    flex: 1, padding: '14px',
+                                    background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                                    border: 'none', borderRadius: '10px',
+                                    color: 'white', fontSize: '1em', fontWeight: 600,
+                                    cursor: 'pointer', letterSpacing: '0.5px'
+                                }}
+                            >
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {mode === 'register' && step === 4 && (
+                    <div>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.1em' }}>Final Touches</h3>
+                        <p style={{ margin: '0 0 20px', opacity: 0.6, fontSize: '0.9em' }}>
+                            Help us customise your experience.
+                        </p>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '10px', display: 'block' }}>Gender Identity</label>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                {['male', 'female', 'other'].map(g => (
+                                    <button
+                                        key={g}
+                                        onClick={() => setGender(g)}
+                                        style={{
+                                            flex: 1, padding: '10px',
+                                            background: gender === g ? '#4CAF50' : 'rgba(255,255,255,0.05)',
+                                            border: `1px solid ${gender === g ? '#4CAF50' : 'rgba(255,255,255,0.2)'}`,
+                                            borderRadius: '8px', color: 'white',
+                                            cursor: 'pointer', fontSize: '0.9em', textTransform: 'capitalize'
+                                        }}
+                                    >
+                                        {g}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '5px', display: 'block' }}>Student Number (Optional)</label>
+                            <input
+                                type="text"
+                                value={studentNo}
+                                onChange={e => setStudentNo(e.target.value)}
+                                placeholder="e.g. 202400123"
+                                style={{
+                                    width: '100%', padding: '12px 14px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: 'white',
+                                    fontSize: '1em', boxSizing: 'border-box',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        {error && <p style={{ color: '#ff6b6b', fontSize: '0.85em', margin: '0 0 15px', textAlign: 'center' }}>{error}</p>}
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => { setStep(3); setError(''); }}
+                                disabled={isSubmitting}
+                                style={{
+                                    flex: '0 0 auto', padding: '14px 20px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    borderRadius: '10px', color: 'white',
+                                    cursor: isSubmitting ? 'default' : 'pointer', fontSize: '1em',
+                                    opacity: isSubmitting ? 0.5 : 1
+                                }}
+                            >
+                                ← Back
+                            </button>
+                            <button
+                                onClick={handleRegister}
+                                disabled={isSubmitting}
+                                style={{
+                                    flex: 1, padding: '14px',
+                                    background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                                    border: 'none', borderRadius: '10px',
+                                    color: 'white', fontSize: '1em', fontWeight: 600,
+                                    cursor: isSubmitting ? 'default' : 'pointer', letterSpacing: '0.5px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                    opacity: isSubmitting ? 0.8 : 1
+                                }}
+                            >
+                                {isSubmitting ? 'Registering...' : '🏰 Start Building'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {mode === 'login' && (
+                    <div>
+                        <h3 style={{ margin: '0 0 8px', fontSize: '1.1em' }}>Welcome back!</h3>
+                        <p style={{ margin: '0 0 20px', opacity: 0.6, fontSize: '0.9em' }}>Enter your credentials to continue.</p>
 
                         <div style={{ marginBottom: '15px' }}>
                             <label style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: '5px', display: 'block' }}>Email Address</label>
@@ -259,8 +442,8 @@ const RegistrationModal = ({ gameState }) => {
                                 type="password"
                                 value={password}
                                 onChange={e => { setPassword(e.target.value); setError(''); }}
-                                onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
-                                placeholder="Min. 6 characters"
+                                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                                placeholder="Your password"
                                 style={{
                                     width: '100%', padding: '12px 14px',
                                     background: 'rgba(255,255,255,0.08)',
@@ -274,39 +457,21 @@ const RegistrationModal = ({ gameState }) => {
 
                         {error && <p style={{ color: '#ff6b6b', fontSize: '0.85em', margin: '0 0 15px', textAlign: 'center' }}>{error}</p>}
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            {mode === 'register' && (
-                                <button
-                                    onClick={() => { setStep(2); setError(''); }}
-                                    disabled={isSubmitting}
-                                    style={{
-                                        flex: '0 0 auto', padding: '14px 20px',
-                                        background: 'rgba(255,255,255,0.08)',
-                                        border: '1px solid rgba(255,255,255,0.15)',
-                                        borderRadius: '10px', color: 'white',
-                                        cursor: isSubmitting ? 'default' : 'pointer', fontSize: '1em',
-                                        opacity: isSubmitting ? 0.5 : 1
-                                    }}
-                                >
-                                    ← Back
-                                </button>
-                            )}
-                            <button
-                                onClick={mode === 'login' ? handleLogin : handleRegister}
-                                disabled={isSubmitting}
-                                style={{
-                                    flex: 1, padding: '14px',
-                                    background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-                                    border: 'none', borderRadius: '10px',
-                                    color: 'white', fontSize: '1em', fontWeight: 600,
-                                    cursor: isSubmitting ? 'default' : 'pointer', letterSpacing: '0.5px',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                                    opacity: isSubmitting ? 0.8 : 1
-                                }}
-                            >
-                                {isSubmitting ? (mode === 'login' ? 'Logging in...' : 'Registering...') : (mode === 'login' ? '🔑 Log In' : '🏰 Start Building')}
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleLogin}
+                            disabled={isSubmitting}
+                            style={{
+                                width: '100%', padding: '14px',
+                                background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                                border: 'none', borderRadius: '10px',
+                                color: 'white', fontSize: '1em', fontWeight: 600,
+                                cursor: isSubmitting ? 'default' : 'pointer', letterSpacing: '0.5px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                opacity: isSubmitting ? 0.8 : 1
+                            }}
+                        >
+                            {isSubmitting ? 'Logging in...' : '🔑 Log In'}
+                        </button>
                     </div>
                 )}
 

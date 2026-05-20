@@ -1,10 +1,10 @@
-// StudyPanel.jsx — AI-powered flashcard generator & viewer
+// StudyPanel.jsx — AI-powered flashcard generator, viewer & quiz mode
 // Runs ALONGSIDE the focus timer — never interrupts it.
 const { useState, useEffect, useCallback, useRef } = React;
 
 const StudyPanel = ({ currentUser, apiBase = '' }) => {
     // ── View state ────────────────────────────────────────────────────────────
-    const [view, setView] = useState('library'); // 'library' | 'generate' | 'study'
+    const [view, setView] = useState('library'); // 'library' | 'generate' | 'study' | 'quiz' | 'quiz-results'
 
     // ── Library (saved sets) ──────────────────────────────────────────────────
     const [sets, setSets]           = useState([]);
@@ -24,6 +24,20 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
     const [cardIndex, setCardIndex]   = useState(0);
     const [flipped, setFlipped]       = useState(false);
     const [toastMsg, setToastMsg]     = useState('');
+
+    // ── Quiz mode ─────────────────────────────────────────────────────────────
+    const [quizSetId, setQuizSetId]       = useState(null);
+    const [quizTitle, setQuizTitle]       = useState('');
+    const [quizQuestions, setQuizQuestions] = useState([]);
+    const [quizIndex, setQuizIndex]       = useState(0);
+    const [selectedAnswer, setSelectedAnswer] = useState(null); // index chosen
+    const [answeredMap, setAnsweredMap]   = useState({}); // { [qIndex]: chosenIndex }
+    const [showExplanation, setShowExplanation] = useState(false);
+    const [quizScore, setQuizScore]       = useState(0);
+    const [quizGenerating, setQuizGenerating] = useState(false);
+    const [quizError, setQuizError]       = useState('');
+    const [quizResult, setQuizResult]     = useState(null); // { coinsEarned, percentage, message }
+    const [quizHistory, setQuizHistory]   = useState([]);
 
     const toastTimer = useRef(null);
 
@@ -152,6 +166,77 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
     const nextCard = () => { setFlipped(false); setCardIndex(i => Math.min(i + 1, totalCards - 1)); };
     const prevCard = () => { setFlipped(false); setCardIndex(i => Math.max(i - 1, 0)); };
 
+    // ─── Start a quiz from a set ──────────────────────────────────────────────
+    const startQuiz = async (setId, setTitle, questionCount = 5) => {
+        setQuizError('');
+        setQuizGenerating(true);
+        try {
+            const res = await fetch(`${apiBase}/api/ai/quiz`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ setId, questionCount })
+            });
+            const data = await res.json();
+            if (!res.ok) { setQuizError(data.error || 'Failed to generate quiz.'); setQuizGenerating(false); return; }
+            setQuizSetId(setId);
+            setQuizTitle(data.setTitle || setTitle);
+            setQuizQuestions(data.questions);
+            setQuizIndex(0);
+            setAnsweredMap({});
+            setSelectedAnswer(null);
+            setShowExplanation(false);
+            setQuizScore(0);
+            setQuizResult(null);
+            setView('quiz');
+        } catch (e) {
+            setQuizError('Network error — please check your connection.');
+        } finally {
+            setQuizGenerating(false);
+        }
+    };
+
+    // ─── Select an answer for current quiz question ───────────────────────────
+    const handleSelectAnswer = (optionIndex) => {
+        if (answeredMap[quizIndex] !== undefined) return; // already answered
+        const correct = quizQuestions[quizIndex]?.answer === optionIndex;
+        setSelectedAnswer(optionIndex);
+        setAnsweredMap(prev => ({ ...prev, [quizIndex]: optionIndex }));
+        setShowExplanation(true);
+        if (correct) setQuizScore(s => s + 1);
+    };
+
+    // ─── Move to next question or finish quiz ─────────────────────────────────
+    const handleNextQuestion = () => {
+        if (quizIndex < quizQuestions.length - 1) {
+            setQuizIndex(i => i + 1);
+            setSelectedAnswer(answeredMap[quizIndex + 1] ?? null);
+            setShowExplanation(answeredMap[quizIndex + 1] !== undefined);
+        } else {
+            submitQuizResult();
+        }
+    };
+
+    // ─── Submit score to backend ──────────────────────────────────────────────
+    const submitQuizResult = async () => {
+        const total = quizQuestions.length;
+        try {
+            const res = await fetch(`${apiBase}/api/ai/quiz/attempt`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ setId: quizSetId, score: quizScore, total })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setQuizResult(data);
+                showToast(data.message);
+            }
+        } catch (e) { console.error('Submit quiz error:', e); }
+        setView('quiz-results');
+    };
+
+    // ─── Retry quiz with the same set ────────────────────────────────────────
+    const retryQuiz = () => startQuiz(quizSetId, quizTitle, quizQuestions.length);
+
     // ─── Keyboard support ─────────────────────────────────────────────────────
     useEffect(() => {
         if (view !== 'study') return;
@@ -208,6 +293,9 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                 {view === 'study' && (
                     <button className="study-tab active">Study</button>
                 )}
+                {(view === 'quiz' || view === 'quiz-results') && (
+                    <button className="study-tab active">🧠 Quiz</button>
+                )}
             </div>
 
             {/* ── Library View ── */}
@@ -246,11 +334,21 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                         </div>
                                         <div className="study-set-footer">
                                             <span className="study-set-coins">+{s.coinsEarned} coins earned</span>
-                                            <button
-                                                className="study-set-delete"
-                                                onClick={(e) => deleteSet(s.id, e)}
-                                                title="Delete set"
-                                            >✕</button>
+                                            <div className="study-set-actions">
+                                                <button
+                                                    className="study-set-quiz-btn"
+                                                    onClick={(e) => { e.stopPropagation(); startQuiz(s.id, s.title); }}
+                                                    title="Take a quiz on this set"
+                                                    disabled={quizGenerating}
+                                                >
+                                                    {quizGenerating && quizSetId === s.id ? '...' : '🧠 Quiz'}
+                                                </button>
+                                                <button
+                                                    className="study-set-delete"
+                                                    onClick={(e) => deleteSet(s.id, e)}
+                                                    title="Delete set"
+                                                >✕</button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -436,6 +534,145 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             <button className="btn-study-primary" onClick={() => setView('library')}>← Back</button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ── Quiz View ── */}
+            {view === 'quiz' && quizQuestions.length > 0 && (() => {
+                const q = quizQuestions[quizIndex];
+                const answered = answeredMap[quizIndex] !== undefined;
+                const chosen   = answeredMap[quizIndex];
+                const correct  = q.answer;
+                const total    = quizQuestions.length;
+                const pct      = Math.round(((quizIndex + (answered ? 1 : 0)) / total) * 100);
+                return (
+                    <div className="quiz-viewer">
+                        {/* Header */}
+                        <div className="study-viewer-header">
+                            <button className="study-back-btn" onClick={() => setView('library')}>← Library</button>
+                            <div className="study-viewer-meta">
+                                <span className="study-viewer-title">{quizTitle}</span>
+                                <span className="study-progress-badge">{quizIndex + 1} / {total}</span>
+                            </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="study-progress-bar">
+                            <div className="study-progress-fill quiz-progress-fill" style={{ width: `${pct}%` }} />
+                        </div>
+
+                        {/* Score tracker */}
+                        <div className="quiz-score-row">
+                            <span className="quiz-score-label">Score</span>
+                            <span className="quiz-score-value">{quizScore} / {Object.keys(answeredMap).length}</span>
+                        </div>
+
+                        {/* Question */}
+                        <div className="quiz-question-card">
+                            <div className="quiz-q-label">QUESTION {quizIndex + 1}</div>
+                            <div className="quiz-q-text">{q.question}</div>
+                        </div>
+
+                        {/* Options */}
+                        <div className="quiz-options">
+                            {q.options.map((opt, i) => {
+                                let cls = 'quiz-option';
+                                if (answered) {
+                                    if (i === correct)       cls += ' quiz-option-correct';
+                                    else if (i === chosen)   cls += ' quiz-option-wrong';
+                                    else                     cls += ' quiz-option-dim';
+                                } else {
+                                    cls += ' quiz-option-idle';
+                                }
+                                return (
+                                    <button
+                                        key={i}
+                                        className={cls}
+                                        onClick={() => handleSelectAnswer(i)}
+                                        disabled={answered}
+                                    >
+                                        <span className="quiz-option-letter">{['A','B','C','D'][i]}</span>
+                                        <span className="quiz-option-text">{opt}</span>
+                                        {answered && i === correct && <span className="quiz-tick">✓</span>}
+                                        {answered && i === chosen && i !== correct && <span className="quiz-cross">✗</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Explanation */}
+                        {showExplanation && (
+                            <div className={`quiz-explanation ${answeredMap[quizIndex] === q.answer ? 'quiz-exp-correct' : 'quiz-exp-wrong'}`}>
+                                <strong>{answeredMap[quizIndex] === q.answer ? '✓ Correct!' : '✗ Incorrect'}</strong>
+                                {' — '}{q.explanation}
+                            </div>
+                        )}
+
+                        {/* Next / Finish */}
+                        {answered && (
+                            <button className="btn-study-primary btn-full quiz-next-btn" onClick={handleNextQuestion}>
+                                {quizIndex < total - 1 ? 'Next Question →' : '🏁 See Results'}
+                            </button>
+                        )}
+                    </div>
+                );
+            })()}
+
+            {/* ── Quiz Results View ── */}
+            {view === 'quiz-results' && (
+                <div className="quiz-results">
+                    <div className="quiz-results-header">
+                        <button className="study-back-btn" onClick={() => setView('library')}>← Library</button>
+                        <span className="study-viewer-title">{quizTitle}</span>
+                    </div>
+
+                    {/* Score ring */}
+                    <div className="quiz-results-body">
+                        <div className="quiz-ring-wrap">
+                            <svg className="quiz-ring" viewBox="0 0 120 120">
+                                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10"/>
+                                <circle
+                                    cx="60" cy="60" r="52" fill="none"
+                                    stroke={quizResult?.percentage === 100 ? '#4ade80' : quizResult?.percentage >= 80 ? '#818cf8' : quizResult?.percentage >= 60 ? '#fbbf24' : '#f87171'}
+                                    strokeWidth="10"
+                                    strokeLinecap="round"
+                                    strokeDasharray={`${2 * Math.PI * 52}`}
+                                    strokeDashoffset={`${2 * Math.PI * 52 * (1 - (quizResult?.percentage ?? 0) / 100)}`}
+                                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s ease' }}
+                                />
+                            </svg>
+                            <div className="quiz-ring-label">
+                                <span className="quiz-ring-pct">{quizResult?.percentage ?? 0}%</span>
+                                <span className="quiz-ring-sub">{quizScore} / {quizQuestions.length} correct</span>
+                            </div>
+                        </div>
+
+                        <div className="quiz-result-msg">
+                            {quizResult?.percentage === 100 && '🏆 Perfect Score! Incredible!'}
+                            {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && '🌟 Great work! Almost perfect!'}
+                            {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && '👍 Good job! Keep practising!'}
+                            {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && '📚 Keep studying — you\'ll get there!'}
+                            {quizResult?.percentage < 40 && '💪 Don\'t give up! Review your flashcards.'}
+                        </div>
+
+                        {quizResult?.coinsEarned > 0 && (
+                            <div className="quiz-coins-badge">
+                                🪙 +{quizResult.coinsEarned} coins earned!
+                            </div>
+                        )}
+
+                        <div className="quiz-results-actions">
+                            <button className="btn-study-primary" onClick={retryQuiz} disabled={quizGenerating}>
+                                {quizGenerating ? '⏳ Generating…' : '🔄 Try Again'}
+                            </button>
+                            <button className="study-nav-btn" onClick={() => setView('study')}>
+                                📖 Review Cards
+                            </button>
+                            <button className="study-nav-btn" onClick={() => setView('library')}>
+                                ← Library
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

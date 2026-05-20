@@ -49,7 +49,7 @@ const useFaculty = (gameState, rewards) => {
         refreshRef.current = fetchLeaderboards;
 
         return () => { cancelled = true; };
-    }, [isLoggedIn, userFaculty, rewards.housesBuilt]); // re-fetch when a house is built
+    }, [isLoggedIn, userFaculty, rewards.housesBuilt, rewards.totalFocusTime]); // re-fetch when a house is built or focus time increases
 
     const refreshLeaderboards = React.useCallback(() => {
         if (refreshRef.current) refreshRef.current();
@@ -77,19 +77,25 @@ const useFaculty = (gameState, rewards) => {
     // ── Interfaculty rankings ────────────────────────────────────────────────
     const interfacultyRankings = useMemo(() => {
         if (liveInterfaculty !== null) {
-            // Merge faculty colour/emoji metadata from SPU_FACULTIES
-            return liveInterfaculty.map(r => ({
-                ...r,
-                ...SPU_FACULTIES.find(f => f.id === r.faculty)
-            }));
+            // Always show all 4 SPU_FACULTIES, merging live data if present, fallback to 0 if not.
+            return SPU_FACULTIES.map(faculty => {
+                const liveData = liveInterfaculty.find(r => r.faculty === faculty.id);
+                return {
+                    ...faculty,
+                    faculty: faculty.id,
+                    totalHours: liveData ? liveData.totalHours : 0.0,
+                    studentCount: liveData ? liveData.studentCount : 0
+                };
+            }).sort((a, b) => b.totalHours - a.totalHours);
         }
         // Fall back to current user's data while loading
         return SPU_FACULTIES.map(faculty => {
             const totalHours = (faculty.id === userFaculty ? (userEntry.weeklyHours || 0) : 0);
             return {
                 ...faculty,
+                faculty: faculty.id,
                 totalHours: parseFloat(totalHours.toFixed(1)),
-                memberCount: (faculty.id === userFaculty ? 1 : 0)
+                studentCount: (faculty.id === userFaculty ? 1 : 0)
             };
         }).sort((a, b) => b.totalHours - a.totalHours);
     }, [liveInterfaculty, userFaculty, userEntry.weeklyHours]);
@@ -102,6 +108,7 @@ const useFaculty = (gameState, rewards) => {
         interfacultyRankings,
         userFacultyInfo,
         loadingLeaderboard,
+        loading: loadingLeaderboard,
         isLiveData: liveLeaderboard !== null,
         refreshLeaderboards
     };

@@ -112,26 +112,18 @@ const ProfilePanel = ({ gameState, rewards }) => {
                         <div className="option-group">
                             <label>Gender:</label>
                             <div className="radio-group">
-                                <label>
-                                    <input
-                                        type="radio"
-                                        name="gender"
-                                        value="male"
-                                        checked={gameState.builderCustomization.gender === 'male'}
-                                        onChange={(e) => handleCustomizationChange('gender', e.target.value)}
-                                    />
-                                    Male
-                                </label>
-                                <label>
-                                    <input
-                                        type="radio"
-                                        name="gender"
-                                        value="female"
-                                        checked={gameState.builderCustomization.gender === 'female'}
-                                        onChange={(e) => handleCustomizationChange('gender', e.target.value)}
-                                    />
-                                    Female
-                                </label>
+                                {['male', 'female', 'other'].map(g => (
+                                    <label key={g} style={{ textTransform: 'capitalize' }}>
+                                        <input
+                                            type="radio"
+                                            name="gender"
+                                            value={g}
+                                            checked={gameState.builderCustomization.gender === g}
+                                            onChange={(e) => handleCustomizationChange('gender', e.target.value)}
+                                        />
+                                        {g}
+                                    </label>
+                                ))}
                             </div>
                         </div>
 
@@ -244,7 +236,21 @@ const ProfilePanel = ({ gameState, rewards }) => {
 
             {/* Focus Statistics */}
             <div className="focus-statistics">
-                <h3>Focus Statistics</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3>Focus Statistics</h3>
+                    <button
+                        onClick={() => {
+                            alert("Academic Focus Report Generated!\n\nUser: " + (gameState.builderCustomization.name || 'Student') + "\nFaculty: " + gameState.user?.faculty + "\nTotal Focus Time: " + Math.floor(rewards.totalFocusTime / 3600) + "h " + Math.floor((rewards.totalFocusTime % 3600) / 60) + "m\nSuccess Rate: " + rewards.successRate + "%\n\nThis report has been saved to your academic profile.");
+                        }}
+                        style={{
+                            background: '#4CAF50', color: 'white', border: 'none',
+                            padding: '6px 12px', borderRadius: '6px', cursor: 'pointer',
+                            fontSize: '0.85em', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px'
+                        }}
+                    >
+                        <i data-feather="file-text" style={{ width: '14px' }}></i> Generate Report
+                    </button>
+                </div>
                 <div className="stats-grid">
                     <div className="stat-item">
                         <label>Total Focus Time</label>
@@ -262,6 +268,44 @@ const ProfilePanel = ({ gameState, rewards }) => {
                         <label>Success Rate</label>
                         <span>{rewards.successRate}%</span>
                     </div>
+                </div>
+            </div>
+
+            {/* Simple Admin / User Management Panel (Conditional/Demo) */}
+            <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <i data-feather="shield" style={{ color: '#FFD700' }}></i> Admin Management
+                </h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '15px' }}>
+                    <p style={{ fontSize: '0.9em', opacity: 0.7 }}>User management and system analytics.</p>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85em', marginTop: '10px' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                <th style={{ textAlign: 'left', padding: '10px' }}>Student</th>
+                                <th style={{ textAlign: 'left', padding: '10px' }}>Faculty</th>
+                                <th style={{ textAlign: 'right', padding: '10px' }}>Hours</th>
+                                <th style={{ textAlign: 'right', padding: '10px' }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style={{ padding: '10px' }}>{gameState.builderCustomization.name || 'You'} (Active)</td>
+                                <td style={{ padding: '10px' }}>{gameState.user?.faculty?.toUpperCase()}</td>
+                                <td style={{ padding: '10px', textAlign: 'right' }}>{(rewards.totalFocusTime / 3600).toFixed(1)}</td>
+                                <td style={{ padding: '10px', textAlign: 'right' }}>
+                                    <button style={{ background: 'none', border: 'none', color: '#4CAF50', cursor: 'pointer' }}>Manage</button>
+                                </td>
+                            </tr>
+                            <tr style={{ opacity: 0.5 }}>
+                                <td style={{ padding: '10px' }}>Musa M.</td>
+                                <td style={{ padding: '10px' }}>NAS</td>
+                                <td style={{ padding: '10px', textAlign: 'right' }}>12.4</td>
+                                <td style={{ padding: '10px', textAlign: 'right' }}>
+                                    <button style={{ background: 'none', border: 'none', color: '#ccc' }}>Manage</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

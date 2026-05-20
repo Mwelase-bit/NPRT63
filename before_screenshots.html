@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BUILDHAUS - Before Screenshots</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="src/styles/App.css">
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: white;
+            padding: 40px;
+            font-family: 'Inter', sans-serif;
+        }
+        .screenshot-section {
+            margin-bottom: 60px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+        }
+        .section-title {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: #1a1a2e;
+            padding: 0 10px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        /* Override fixed positioning for the modal so it shows nicely on the page */
+        .registration-mockup > div {
+            position: relative !important;
+            background: transparent !important;
+            height: auto !important;
+            padding: 40px 0 !important;
+            backdrop-filter: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h2>📸 Phase 3 "Before" Screenshots Helper</h2>
+        <p style="opacity: 0.7;">Take screenshots of these components to show what the app looked like BEFORE your design iterations.</p>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="text/babel" src="src/components/UI/RegistrationModal_Old.jsx"></script>
+    <script type="text/babel" src="src/components/UI/ProfilePanel_Old.jsx"></script>
+    <script type="text/babel" src="src/components/UI/TimerPanel_Old.jsx"></script>
+    <script type="text/babel" src="src/components/UI/ShopPanel_Old.jsx"></script>
+
+    <script type="text/babel">
+        const AppMockup = () => {
+            return (
+                <div>
+                    <div className="screenshot-section">
+                        <div className="section-title">Iteration 1: Old Registration Form (Single Page)</div>
+                        <div className="registration-mockup">
+                            <window.RegistrationModal />
+                        </div>
+                    </div>
+
+                    <div className="screenshot-section">
+                        <div className="section-title">Iteration 2 & 3: Old Profile (Binary Gender, No Saving Indicator, No Report)</div>
+                        <div style={{ maxWidth: '800px', margin: '0 auto', background: '#16213e', borderRadius: '12px', padding: '20px' }}>
+                            <window.ProfilePanel />
+                        </div>
+                    </div>
+
+                    <div className="screenshot-section">
+                        <div className="section-title">Iteration 4: Old Timer Panel (No Confirmation Feedback)</div>
+                        <div style={{ maxWidth: '400px', margin: '0 auto' }}>
+                            <window.TimerPanel />
+                        </div>
+                    </div>
+
+                    <div className="screenshot-section">
+                        <div className="section-title">Iteration 5: Old Shop Panel (Plain Text Tabs)</div>
+                        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+                            <window.ShopPanel />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        setTimeout(() => {
+            ReactDOM.render(<AppMockup />, document.getElementById('root'));
+        }, 500);
+    </script>
+</body>
+</html>

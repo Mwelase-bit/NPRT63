@@ -30,7 +30,7 @@ router.post(
     requireFields(['name', 'email', 'password', 'faculty']),
     async (req, res, next) => {
         try {
-            const { name, email, password, faculty, student_no } = req.body;
+            const { name, email, password, faculty, student_no, gender } = req.body;
 
             // Validate email format
             if (!validateEmail(email)) {
@@ -65,9 +65,9 @@ router.post(
 
             // Insert user
             const result = db.prepare(`
-                INSERT INTO users (name, email, password, faculty, student_no)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(name, email.toLowerCase(), hashedPassword, faculty, student_no || null);
+                INSERT INTO users (name, email, password, faculty, student_no, gender)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(name, email.toLowerCase(), hashedPassword, faculty, student_no || null, gender || 'other');
 
             const user = db.prepare(`
                 SELECT id, name, email, faculty, student_no, gender, coins, streak,

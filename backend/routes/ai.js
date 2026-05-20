@@ -1,4 +1,5 @@
 // routes/ai.js — AI Study features powered by Groq (LLaMA 3)
+// Includes: flashcard generation, quiz generation, quiz attempt recording
 const express = require('express');
 const router  = express.Router();
 const db      = require('../database');
@@ -10,6 +11,9 @@ const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
 // Coins awarded per flashcard set generated (game integration)
 const COINS_PER_SET = 10;
+
+// Quiz coin rewards based on score percentage
+const QUIZ_COINS = { perfect: 25, great: 15, good: 10, pass: 5 };
 
 // ─── Helper: call Groq API ────────────────────────────────────────────────────
 async function callGroq(systemPrompt, userContent, maxTokens = 2048) {
@@ -221,6 +225,156 @@ router.delete('/flashcards/:setId', authenticate, (req, res) => {
     } catch (err) {
         console.error('Delete set error:', err);
         res.status(500).json({ error: 'Server error deleting set.' });
+    }
+});
+
+// ─── POST /api/ai/quiz — Generate MCQ quiz from a flashcard set ───────────────
+router.post('/quiz', authenticate, async (req, res) => {
+    try {
+        const { setId, questionCount = 5 } = req.body;
+        const userId = req.user.id;
+
+        if (!setId) return res.status(400).json({ error: 'setId is required.' });
+
+        // Load the source text for the set
+        const set = db.prepare(
+            'SELECT id, title, subject, source_text FROM flashcard_sets WHERE id = ? AND user_id = ?'
+        ).get(setId, userId);
+
+        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+        if (!set.source_text || set.source_text.trim().length < 20) {
+            return res.status(400).json({ error: 'This set has no source text to generate a quiz from.' });
+        }
+
+        const safeCount = Math.min(Math.max(parseInt(questionCount) || 5, 3), 10);
+
+        const systemPrompt = `You are an expert academic quiz creator for university students.
+Given study content, create multiple-choice questions with exactly 4 options each.
+You MUST respond with ONLY a valid JSON array — no markdown, no explanation, no code fences.
+Each object must have exactly these keys:
+- "question": the question text (string)
+- "options": array of exactly 4 strings (the answer choices)
+- "answer": the index (0-3) of the correct option
+- "explanation": a brief explanation of why the answer is correct (1-2 sentences)
+Make sure distractors (wrong answers) are plausible but clearly incorrect to a student who knows the material.`;
+
+        const userMessage = `Create exactly ${safeCount} multiple-choice questions from the following study content.
+Respond with ONLY the JSON array.
+
+--- CONTENT START ---
+${set.source_text.trim()}
+--- CONTENT END ---`;
+
+        const rawResponse = await callGroq(systemPrompt, userMessage, 3000);
+
+        let questions;
+        try {
+            const cleaned = rawResponse.replace(/```json|```/gi, '').trim();
+            questions = JSON.parse(cleaned);
+            if (!Array.isArray(questions)) throw new Error('Not an array');
+        } catch (parseErr) {
+            console.error('Quiz parse error. Raw:', rawResponse);
+            return res.status(502).json({
+                error: 'The AI returned an unexpected format. Please try again.',
+                detail: parseErr.message
+            });
+        }
+
+        // Sanitise questions
+        const cleanQuestions = questions
+            .filter(q =>
+                q &&
+                typeof q.question === 'string' &&
+                Array.isArray(q.options) && q.options.length === 4 &&
+                typeof q.answer === 'number' && q.answer >= 0 && q.answer <= 3 &&
+                typeof q.explanation === 'string'
+            )
+            .slice(0, safeCount)
+            .map((q, i) => ({
+                id: i,
+                question:    q.question.trim().slice(0, 400),
+                options:     q.options.map(o => String(o).trim().slice(0, 200)),
+                answer:      q.answer,
+                explanation: q.explanation.trim().slice(0, 400)
+            }));
+
+        if (cleanQuestions.length === 0) {
+            return res.status(502).json({ error: 'AI did not return any usable questions. Please try again.' });
+        }
+
+        res.json({
+            setId: set.id,
+            setTitle: set.title,
+            subject: set.subject,
+            questions: cleanQuestions
+        });
+
+    } catch (err) {
+        console.error('AI quiz error:', err);
+        res.status(500).json({ error: err.message || 'Server error generating quiz.' });
+    }
+});
+
+// ─── POST /api/ai/quiz/attempt — Save a quiz result & award coins ─────────────
+router.post('/quiz/attempt', authenticate, async (req, res) => {
+    try {
+        const { setId, score, total } = req.body;
+        const userId = req.user.id;
+
+        if (setId === undefined || score === undefined || total === undefined) {
+            return res.status(400).json({ error: 'setId, score, and total are required.' });
+        }
+
+        const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+        let coinsEarned = 0;
+        if (pct === 100)      coinsEarned = QUIZ_COINS.perfect;
+        else if (pct >= 80)   coinsEarned = QUIZ_COINS.great;
+        else if (pct >= 60)   coinsEarned = QUIZ_COINS.good;
+        else if (pct >= 40)   coinsEarned = QUIZ_COINS.pass;
+
+        // Persist attempt
+        db.prepare(`
+            INSERT INTO quiz_attempts (user_id, set_id, score, total, coins_earned)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(userId, setId, score, total, coinsEarned);
+
+        // Award coins
+        if (coinsEarned > 0) {
+            db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(coinsEarned, userId);
+        }
+
+        res.json({
+            message: coinsEarned > 0
+                ? `Quiz complete! You scored ${pct}% and earned +${coinsEarned} coins!`
+                : `Quiz complete! You scored ${pct}%. Keep practising!`,
+            coinsEarned,
+            percentage: pct
+        });
+
+    } catch (err) {
+        console.error('Quiz attempt error:', err);
+        res.status(500).json({ error: err.message || 'Server error saving quiz attempt.' });
+    }
+});
+
+// ─── GET /api/ai/quiz/attempts/:setId — Get quiz history for a set ────────────
+router.get('/quiz/attempts/:setId', authenticate, (req, res) => {
+    try {
+        const userId = req.user.id;
+        const setId  = parseInt(req.params.setId);
+
+        const attempts = db.prepare(`
+            SELECT score, total, coins_earned, taken_at
+            FROM quiz_attempts
+            WHERE user_id = ? AND set_id = ?
+            ORDER BY taken_at DESC
+            LIMIT 10
+        `).all(userId, setId);
+
+        res.json({ attempts });
+    } catch (err) {
+        console.error('Quiz attempts error:', err);
+        res.status(500).json({ error: 'Server error fetching quiz attempts.' });
     }
 });
 
