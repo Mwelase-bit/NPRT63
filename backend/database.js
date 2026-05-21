@@ -1,10 +1,19 @@
 // database.js — SQLite database setup, schema, and seed data
 const Database = require('better-sqlite3');
 const path = require('path');
-require('dotenv').config();
+// Safely load .env from the backend directory to ensure consistent environment variables
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const DB_PATH = process.env.DB_PATH || './buildhaus.db';
-const db = new Database(path.resolve(DB_PATH));
+
+// Ensure the database file is always resolved relative to the project root if it is a relative path.
+// This prevents having separate database files in the root and in the backend folder depending on
+// the current working directory from which the process was started.
+const resolvedDbPath = path.isAbsolute(DB_PATH)
+  ? DB_PATH
+  : path.resolve(__dirname, '..', DB_PATH);
+
+const db = new Database(resolvedDbPath);
 
 // Enable WAL mode for better performance
 db.pragma('journal_mode = WAL');

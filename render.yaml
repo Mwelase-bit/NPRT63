@@ -4,12 +4,16 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: node backend/server.js
+    disk:
+      name: buildhaus-db-disk
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
         generateValue: true
       - key: DB_PATH
-        value: /opt/render/project/src/buildhaus.db
+        value: /data/buildhaus.db
       - key: GROQ_API_KEY
         sync: false
