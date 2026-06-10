@@ -1,30 +1,28 @@
 // routes/achievements.js — Sync and retrieve earned achievements
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
 
-// ─── GET /api/achievements — All achievements earned by the current user ───────
-router.get('/', authenticate, (req, res) => {
+// ─── GET /api/achievements — All achievements earned by the current user ────────
+router.get('/', authenticate, async (req, res) => {
     try {
-        const userId = req.user.id;
-        const achievements = db.prepare(`
+        const result = await pool.query(`
             SELECT achievement_id, unlocked_at
             FROM achievements
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY unlocked_at DESC
-        `).all(userId);
+        `, [req.user.id]);
 
-        res.json({ achievements });
+        res.json({ achievements: result.rows });
     } catch (err) {
         console.error('Achievements fetch error:', err);
         res.status(500).json({ error: 'Server error fetching achievements.' });
     }
 });
 
-// ─── POST /api/achievements/unlock — Record a newly unlocked achievement ───────
-// The frontend determines when an achievement condition is met and calls this.
-router.post('/unlock', authenticate, (req, res) => {
+// ─── POST /api/achievements/unlock — Record a newly unlocked achievement ────────
+router.post('/unlock', authenticate, async (req, res) => {
     try {
         const { achievementId } = req.body;
         const userId = req.user.id;
@@ -33,13 +31,14 @@ router.post('/unlock', authenticate, (req, res) => {
             return res.status(400).json({ error: 'achievementId is required.' });
         }
 
-        // Idempotent insert — silently ignores duplicates
-        const result = db.prepare(`
-            INSERT OR IGNORE INTO achievements (user_id, achievement_id)
-            VALUES (?, ?)
-        `).run(userId, achievementId);
+        // ON CONFLICT DO NOTHING is the PostgreSQL equivalent of SQLite's INSERT OR IGNORE
+        const result = await pool.query(`
+            INSERT INTO achievements (user_id, achievement_id)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id, achievement_id) DO NOTHING
+        `, [userId, achievementId]);
 
-        if (result.changes === 0) {
+        if (result.rowCount === 0) {
             return res.json({ message: 'Achievement already unlocked.', alreadyUnlocked: true });
         }
 

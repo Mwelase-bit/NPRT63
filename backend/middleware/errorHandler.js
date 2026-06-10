@@ -1,9 +1,11 @@
 const AppError = require('../utils/AppError');
 
-const handleSQLiteConstraintError = (err) => {
-    // Determine the type of constraint failed
-    if (err.message.includes('UNIQUE constraint failed: users.email')) {
+const handleDBConstraintError = (err) => {
+    if (err.message.includes('users.email') || err.message.includes('users_email_key')) {
         return new AppError('An account with this email already exists.', 409);
+    }
+    if (err.message.includes('student_no') || err.message.includes('users_student_no_key')) {
+        return new AppError('An account with this student number already exists.', 409);
     }
     return new AppError('Database constraint failed', 400);
 };
@@ -12,11 +14,14 @@ const errorHandler = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 
-    let error = { ...err, name: err.name, message: err.message };
+    let error = { ...err, name: err.name, message: err.message, code: err.code };
 
-    // SQLite Errors
-    if (error.name === 'SqliteError' && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        error = handleSQLiteConstraintError(error);
+    // DB Constraint Errors (SQLite: SQLITE_CONSTRAINT_UNIQUE, PostgreSQL: 23505)
+    if (
+        (error.name === 'SqliteError' && error.code === 'SQLITE_CONSTRAINT_UNIQUE') ||
+        error.code === '23505'
+    ) {
+        error = handleDBConstraintError(error);
     }
 
     // JWT Errors

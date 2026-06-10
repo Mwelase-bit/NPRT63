@@ -9,7 +9,7 @@ const http = require('http');
 const WebSocket = require('ws');
 
 // Initialise database (creates/migrates tables and seeds shop data)
-require('./database');
+const { pool, initDatabase } = require('./database');
 
 // ─── Import Routes ────────────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth');
@@ -145,32 +145,44 @@ wss.on('close', () => {
     clearInterval(heartbeatInterval);
 });
 
-server.listen(PORT, () => {
-    console.log('');
-    console.log('🏰 BUILDHAUS/CampusBuilder API & WS Server v2.1');
-    console.log('─────────────────────────────────────');
-    console.log(`📡 HTTP & WS Running at:  http://localhost:${PORT}`);
-    console.log(`🔗 Health:      http://localhost:${PORT}/api/health`);
-    console.log(`👤 Auth:        http://localhost:${PORT}/api/auth`);
-    console.log(`⏱️  Sessions:    http://localhost:${PORT}/api/sessions`);
-    console.log(`🏆 Leaderboard: http://localhost:${PORT}/api/leaderboard`);
-    console.log(`🛒 Shop:        http://localhost:${PORT}/api/shop`);
-    console.log(`🎖️  Achievements: http://localhost:${PORT}/api/achievements`);
-    console.log(`🤖 AI Study:     http://localhost:${PORT}/api/ai/flashcards`);
-    console.log('─────────────────────────────────────');
-    console.log('');
-});
+async function startServer() {
+    try {
+        await initDatabase();
+        server.listen(PORT, () => {
+            console.log('');
+            console.log('🏰 BUILDHAUS/CampusBuilder API & WS Server v2.1');
+            console.log('─────────────────────────────────────');
+            console.log(`📡 HTTP & WS Running at:  http://localhost:${PORT}`);
+            console.log(`🔗 Health:      http://localhost:${PORT}/api/health`);
+            console.log(`👤 Auth:        http://localhost:${PORT}/api/auth`);
+            console.log(`⏱️  Sessions:    http://localhost:${PORT}/api/sessions`);
+            console.log(`🏆 Leaderboard: http://localhost:${PORT}/api/leaderboard`);
+            console.log(`🛒 Shop:        http://localhost:${PORT}/api/shop`);
+            console.log(`🎖️  Achievements: http://localhost:${PORT}/api/achievements`);
+            console.log(`🤖 AI Study:     http://localhost:${PORT}/api/ai/flashcards`);
+            console.log('─────────────────────────────────────');
+            console.log('');
+        });
+    } catch (err) {
+        console.error('Failed to initialize database or start server:', err);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
-const db = require('./database');
-
 const shutdown = (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
     clearInterval(heartbeatInterval);
     server.close(() => {
-        db.close();
-        console.log('Database connection closed. Goodbye!');
-        process.exit(0);
+        pool.end().then(() => {
+            console.log('Database connection pool ended. Goodbye!');
+            process.exit(0);
+        }).catch((err) => {
+            console.error('Error ending pool:', err);
+            process.exit(1);
+        });
     });
     // Force exit after 10s if server hasn't closed
     setTimeout(() => {

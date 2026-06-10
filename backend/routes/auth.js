@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../database');
+const { pool } = require('../database');
 const AppError = require('../utils/AppError');
 const { authenticate } = require('../middleware/auth');
 const { requireFields, validateEmail, validateFaculty, authLimiter } = require('../middleware/validate');
@@ -15,7 +15,7 @@ const generateToken = (user) =>
     jwt.sign(
         { id: user.id, email: user.email, faculty: user.faculty },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '30d' }  // Extended to 30 days so users stay logged in longer
     );
 
 const safeUser = (u) => {
@@ -32,49 +32,37 @@ router.post(
         try {
             const { name, email, password, faculty, student_no, gender } = req.body;
 
-            // Validate email format
             if (!validateEmail(email)) {
                 return res.status(400).json({ error: 'Please provide a valid email address.' });
             }
-
-            // Validate faculty
             if (!validateFaculty(faculty)) {
-                return res.status(400).json({
-                    error: 'Invalid faculty. Must be one of: nas, edu, ems, hum.'
-                });
+                return res.status(400).json({ error: 'Invalid faculty. Must be one of: nas, edu, ems, hum.' });
             }
-
-            // Validate password length
             if (password.length < 6) {
                 return res.status(400).json({ error: 'Password must be at least 6 characters.' });
             }
-
-            // Validate name length
             if (name.length < 2 || name.length > 80) {
                 return res.status(400).json({ error: 'Name must be between 2 and 80 characters.' });
             }
 
             // Check if email already in use
-            const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
-            if (existing) {
+            const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+            if (existing.rows.length > 0) {
                 throw new AppError('An account with this email already exists.', 409);
             }
 
             // Hash password
             const hashedPassword = await bcrypt.hash(password, 12);
 
-            // Insert user
-            const result = db.prepare(`
+            // Insert user — RETURNING gives us the new row immediately
+            const result = await pool.query(`
                 INSERT INTO users (name, email, password, faculty, student_no, gender)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `).run(name, email.toLowerCase(), hashedPassword, faculty, student_no || null, gender || 'other');
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, name, email, faculty, student_no, gender,
+                          coins, streak, houses_built, total_focus_sec, last_focus_date, created_at
+            `, [name, email.toLowerCase(), hashedPassword, faculty, student_no || null, gender || 'other']);
 
-            const user = db.prepare(`
-                SELECT id, name, email, faculty, student_no, gender, coins, streak,
-                       houses_built, total_focus_sec, last_focus_date, created_at
-                FROM users WHERE id = ?
-            `).get(result.lastInsertRowid);
-
+            const user = result.rows[0];
             const token = generateToken(user);
 
             res.status(201).json({
@@ -101,7 +89,8 @@ router.post(
                 return res.status(400).json({ error: 'Please provide a valid email address.' });
             }
 
-            const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+            const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+            const user = result.rows[0];
             if (!user) {
                 throw new AppError('Invalid email or password.', 401);
             }
@@ -114,13 +103,13 @@ router.post(
             const token = generateToken(user);
 
             // Fetch owned items
-            const ownedItems = db.prepare('SELECT item_id FROM user_items WHERE user_id = ?').all(user.id);
+            const ownedResult = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [user.id]);
 
             res.json({
                 message: 'Login successful!',
                 token,
                 user: safeUser(user),
-                ownedItems: ownedItems.map(r => r.item_id)
+                ownedItems: ownedResult.rows.map(r => r.item_id)
             });
         } catch (err) {
             next(err);
@@ -129,23 +118,24 @@ router.post(
 );
 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
-router.get('/me', authenticate, (req, res, next) => {
+router.get('/me', authenticate, async (req, res, next) => {
     try {
-        const user = db.prepare(`
+        const result = await pool.query(`
             SELECT id, name, email, faculty, student_no, gender, coins, streak,
                    houses_built, total_focus_sec, last_focus_date, created_at
-            FROM users WHERE id = ?
-        `).get(req.user.id);
+            FROM users WHERE id = $1
+        `, [req.user.id]);
 
+        const user = result.rows[0];
         if (!user) throw new AppError('User not found.', 404);
 
-        const ownedItems = db.prepare('SELECT item_id FROM user_items WHERE user_id = ?').all(user.id);
-        const achievements = db.prepare('SELECT achievement_id, unlocked_at FROM achievements WHERE user_id = ?').all(user.id);
+        const ownedResult = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [user.id]);
+        const achResult = await pool.query('SELECT achievement_id, unlocked_at FROM achievements WHERE user_id = $1', [user.id]);
 
         res.json({
             user,
-            ownedItems: ownedItems.map(r => r.item_id),
-            achievements
+            ownedItems: ownedResult.rows.map(r => r.item_id),
+            achievements: achResult.rows
         });
     } catch (err) {
         next(err);

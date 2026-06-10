@@ -1,7 +1,7 @@
 // routes/leaderboard.js — Faculty, interfaculty, and global leaderboards
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
 
 const FACULTY_NAMES = {
@@ -11,54 +11,46 @@ const FACULTY_NAMES = {
     hum: 'Faculty of Humanities'
 };
 
-const FACULTY_EMOJIS = {
-    nas: '🔬', edu: '📚', ems: '📊', hum: '🎨'
-};
+const FACULTY_EMOJIS  = { nas: '🔬', edu: '📚', ems: '📊', hum: '🎨' };
+const FACULTY_COLORS  = { nas: '#2196F3', edu: '#4CAF50', ems: '#FF9800', hum: '#9C27B0' };
 
-const FACULTY_COLORS = {
-    nas: '#2196F3', edu: '#4CAF50', ems: '#FF9800', hum: '#9C27B0'
-};
-
-// Shared weekly window (last 7 days)
-const weekAgoDate = () => new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0];
-
-// ─── GET /api/leaderboard/faculty — Rankings within the user's faculty ────────
-router.get('/faculty', authenticate, (req, res) => {
+// ─── GET /api/leaderboard/faculty — Rankings within the user's faculty ─────────
+router.get('/faculty', authenticate, async (req, res) => {
     try {
         const faculty = req.query.faculty || req.user.faculty;
-        const weekAgo = weekAgoDate();
 
-        const members = db.prepare(`
+        const result = await pool.query(`
             SELECT
                 u.id,
                 u.name,
                 u.faculty,
                 u.streak,
                 u.houses_built,
-                COALESCE(SUM(CASE WHEN s.completed = 1 THEN s.elapsed ELSE 0 END), 0) AS weekly_seconds,
-                COUNT(CASE WHEN s.completed = 1 THEN 1 END)                            AS sessions_completed
+                COALESCE(SUM(CASE WHEN s.completed THEN s.elapsed ELSE 0 END), 0) AS weekly_seconds,
+                COUNT(CASE WHEN s.completed THEN 1 END)                            AS sessions_completed
             FROM users u
             LEFT JOIN focus_sessions s
-                ON s.user_id = u.id AND date(s.created_at) >= ?
-            WHERE u.faculty = ?
+                ON s.user_id = u.id
+               AND s.created_at::date >= (CURRENT_DATE - INTERVAL '7 days')
+            WHERE u.faculty = $1
             GROUP BY u.id
             ORDER BY weekly_seconds DESC
-        `).all(weekAgo, faculty);
+        `, [faculty]);
 
         res.json({
             faculty,
-            facultyName: FACULTY_NAMES[faculty] || faculty,
-            facultyEmoji: FACULTY_EMOJIS[faculty] || '🏫',
-            facultyColor: FACULTY_COLORS[faculty] || '#888',
-            leaderboard: members.map((m, i) => ({
-                rank: i + 1,
-                id: m.id,
-                name: m.name,
-                weeklyHours: parseFloat((m.weekly_seconds / 3600).toFixed(1)),
-                streak: m.streak,
-                housesBuilt: m.houses_built,
-                sessionsCompleted: m.sessions_completed,
-                isCurrentUser: m.id === req.user.id
+            facultyName:  FACULTY_NAMES[faculty]  || faculty,
+            facultyEmoji: FACULTY_EMOJIS[faculty]  || '🏫',
+            facultyColor: FACULTY_COLORS[faculty]  || '#888',
+            leaderboard: result.rows.map((m, i) => ({
+                rank:              i + 1,
+                id:                m.id,
+                name:              m.name,
+                weeklyHours:       parseFloat((parseInt(m.weekly_seconds, 10) / 3600).toFixed(1)),
+                streak:            m.streak,
+                housesBuilt:       m.houses_built,
+                sessionsCompleted: parseInt(m.sessions_completed, 10),
+                isCurrentUser:     m.id === req.user.id
             }))
         });
     } catch (err) {
@@ -67,33 +59,32 @@ router.get('/faculty', authenticate, (req, res) => {
     }
 });
 
-// ─── GET /api/leaderboard/interfaculty — Campus-wide faculty rankings ─────────
-router.get('/interfaculty', authenticate, (req, res) => {
+// ─── GET /api/leaderboard/interfaculty — Campus-wide faculty rankings ──────────
+router.get('/interfaculty', authenticate, async (req, res) => {
     try {
-        const weekAgo = weekAgoDate();
-
-        const results = db.prepare(`
+        const result = await pool.query(`
             SELECT
                 u.faculty,
-                COUNT(DISTINCT u.id)                                                    AS student_count,
-                COALESCE(SUM(CASE WHEN s.completed = 1 THEN s.elapsed ELSE 0 END), 0)  AS total_seconds
+                COUNT(DISTINCT u.id)                                                AS student_count,
+                COALESCE(SUM(CASE WHEN s.completed THEN s.elapsed ELSE 0 END), 0)  AS total_seconds
             FROM users u
             LEFT JOIN focus_sessions s
-                ON s.user_id = u.id AND date(s.created_at) >= ?
+                ON s.user_id = u.id
+               AND s.created_at::date >= (CURRENT_DATE - INTERVAL '7 days')
             GROUP BY u.faculty
             ORDER BY total_seconds DESC
-        `).all(weekAgo);
+        `);
 
         res.json({
             userFaculty: req.user.faculty,
-            rankings: results.map((r, i) => ({
-                rank: i + 1,
-                faculty: r.faculty,
-                facultyName: FACULTY_NAMES[r.faculty] || r.faculty,
-                facultyEmoji: FACULTY_EMOJIS[r.faculty] || '🏫',
-                facultyColor: FACULTY_COLORS[r.faculty] || '#888',
-                totalHours: parseFloat((r.total_seconds / 3600).toFixed(1)),
-                studentCount: r.student_count,
+            rankings: result.rows.map((r, i) => ({
+                rank:         i + 1,
+                faculty:      r.faculty,
+                facultyName:  FACULTY_NAMES[r.faculty]  || r.faculty,
+                facultyEmoji: FACULTY_EMOJIS[r.faculty]  || '🏫',
+                facultyColor: FACULTY_COLORS[r.faculty]  || '#888',
+                totalHours:   parseFloat((parseInt(r.total_seconds, 10) / 3600).toFixed(1)),
+                studentCount: parseInt(r.student_count, 10),
                 isUserFaculty: r.faculty === req.user.faculty
             }))
         });
@@ -103,32 +94,26 @@ router.get('/interfaculty', authenticate, (req, res) => {
     }
 });
 
-// ─── GET /api/leaderboard/global — Top 50 users by all-time focus hours ───────
-router.get('/global', authenticate, (req, res) => {
+// ─── GET /api/leaderboard/global — Top 50 users by all-time focus hours ────────
+router.get('/global', authenticate, async (req, res) => {
     try {
-        const top = db.prepare(`
-            SELECT
-                u.id,
-                u.name,
-                u.faculty,
-                u.streak,
-                u.houses_built,
-                u.total_focus_sec
-            FROM users u
-            ORDER BY u.total_focus_sec DESC
+        const result = await pool.query(`
+            SELECT id, name, faculty, streak, houses_built, total_focus_sec
+            FROM users
+            ORDER BY total_focus_sec DESC
             LIMIT 50
-        `).all();
+        `);
 
         res.json({
-            leaderboard: top.map((u, i) => ({
-                rank: i + 1,
-                id: u.id,
-                name: u.name,
-                faculty: u.faculty,
-                facultyName: FACULTY_NAMES[u.faculty] || u.faculty,
-                totalHours: parseFloat((u.total_focus_sec / 3600).toFixed(1)),
-                streak: u.streak,
-                housesBuilt: u.houses_built,
+            leaderboard: result.rows.map((u, i) => ({
+                rank:          i + 1,
+                id:            u.id,
+                name:          u.name,
+                faculty:       u.faculty,
+                facultyName:   FACULTY_NAMES[u.faculty] || u.faculty,
+                totalHours:    parseFloat((u.total_focus_sec / 3600).toFixed(1)),
+                streak:        u.streak,
+                housesBuilt:   u.houses_built,
                 isCurrentUser: u.id === req.user.id
             }))
         });
@@ -138,23 +123,24 @@ router.get('/global', authenticate, (req, res) => {
     }
 });
 
-// ─── GET /api/leaderboard/summary — Platform wide totals ──────────────────────
-router.get('/summary', authenticate, (req, res) => {
+// ─── GET /api/leaderboard/summary — Platform-wide totals ──────────────────────
+router.get('/summary', authenticate, async (req, res) => {
     try {
-        const stats = db.prepare(`
+        const result = await pool.query(`
             SELECT
-                COUNT(id) AS total_users,
+                COUNT(id)                         AS total_users,
                 COALESCE(SUM(total_focus_sec), 0) AS total_seconds,
-                COALESCE(SUM(houses_built), 0) AS total_houses,
-                COALESCE(AVG(streak), 0) AS avg_streak
+                COALESCE(SUM(houses_built), 0)    AS total_houses,
+                COALESCE(AVG(streak), 0)          AS avg_streak
             FROM users
-        `).get();
+        `);
 
+        const s = result.rows[0];
         res.json({
-            totalMembers: stats.total_users,
-            totalHours: Math.round(stats.total_seconds / 3600),
-            totalHouses: stats.total_houses,
-            averageStreak: stats.avg_streak.toFixed(1)
+            totalMembers: parseInt(s.total_users, 10),
+            totalHours:   Math.round(parseInt(s.total_seconds, 10) / 3600),
+            totalHouses:  parseInt(s.total_houses, 10),
+            averageStreak: parseFloat(s.avg_streak).toFixed(1)
         });
     } catch (err) {
         console.error('Summary stats error:', err);

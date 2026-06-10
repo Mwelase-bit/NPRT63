@@ -2,7 +2,7 @@
 // Includes: flashcard generation, quiz generation, quiz attempt recording
 const express = require('express');
 const router  = express.Router();
-const db      = require('../database');
+const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -109,29 +109,36 @@ ${text.trim()}
         }
 
         // ── Persist to database ──────────────────────────────────────────────
-        const saveSet = db.transaction(() => {
-            const setRow = db.prepare(`
+        const client = await pool.connect();
+        let newSetId;
+        try {
+            await client.query('BEGIN');
+
+            const setRes = await client.query(`
                 INSERT INTO flashcard_sets (user_id, title, subject, source_text, card_count, coins_earned)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `).run(userId, safeTitle, safeSubject, text.trim().slice(0, 8000), cleanCards.length, COINS_PER_SET);
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            `, [userId, safeTitle, safeSubject, text.trim().slice(0, 8000), cleanCards.length, COINS_PER_SET]);
 
-            const setId = setRow.lastInsertRowid;
+            newSetId = setRes.rows[0].id;
 
-            const insertCard = db.prepare(`
-                INSERT INTO flashcards (set_id, user_id, front, back, position)
-                VALUES (?, ?, ?, ?, ?)
-            `);
             for (const card of cleanCards) {
-                insertCard.run(setId, userId, card.front, card.back, card.position);
+                await client.query(`
+                    INSERT INTO flashcards (set_id, user_id, front, back, position)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [newSetId, userId, card.front, card.back, card.position]);
             }
 
             // Award coins for generating the set (game integration)
-            db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(COINS_PER_SET, userId);
+            await client.query('UPDATE users SET coins = coins + $1 WHERE id = $2', [COINS_PER_SET, userId]);
 
-            return setId;
-        });
-
-        const newSetId = saveSet();
+            await client.query('COMMIT');
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            throw err;
+        } finally {
+            client.release();
+        }
 
         res.status(201).json({
             message: `Generated ${cleanCards.length} flashcards! +${COINS_PER_SET} coins earned. 🎴`,
@@ -147,19 +154,19 @@ ${text.trim()}
 });
 
 // ─── GET /api/ai/flashcards — List all saved sets for this user ───────────────
-router.get('/flashcards', authenticate, (req, res) => {
+router.get('/flashcards', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const sets = db.prepare(`
+        const result = await pool.query(`
             SELECT id, title, subject, card_count, coins_earned, created_at
             FROM flashcard_sets
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY created_at DESC
             LIMIT 50
-        `).all(userId);
+        `, [userId]);
 
         res.json({
-            sets: sets.map(s => ({
+            sets: result.rows.map(s => ({
                 id:         s.id,
                 title:      s.title,
                 subject:    s.subject,
@@ -175,22 +182,23 @@ router.get('/flashcards', authenticate, (req, res) => {
 });
 
 // ─── GET /api/ai/flashcards/:setId — Get cards in a specific set ─────────────
-router.get('/flashcards/:setId', authenticate, (req, res) => {
+router.get('/flashcards/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
         const setId  = parseInt(req.params.setId);
 
-        const set = db.prepare(`
+        const setRes = await pool.query(`
             SELECT id, title, subject, card_count, coins_earned, created_at
-            FROM flashcard_sets WHERE id = ? AND user_id = ?
-        `).get(setId, userId);
+            FROM flashcard_sets WHERE id = $1 AND user_id = $2
+        `, [setId, userId]);
 
-        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+        if (setRes.rows.length === 0) return res.status(404).json({ error: 'Flashcard set not found.' });
+        const set = setRes.rows[0];
 
-        const cards = db.prepare(`
+        const cardsRes = await pool.query(`
             SELECT id, front, back, position
-            FROM flashcards WHERE set_id = ? ORDER BY position ASC
-        `).all(setId);
+            FROM flashcards WHERE set_id = $1 ORDER BY position ASC
+        `, [setId]);
 
         res.json({
             set: {
@@ -201,7 +209,7 @@ router.get('/flashcards/:setId', authenticate, (req, res) => {
                 coinsEarned: set.coins_earned,
                 createdAt:  set.created_at
             },
-            cards: cards.map(c => ({ id: c.id, front: c.front, back: c.back, position: c.position }))
+            cards: cardsRes.rows.map(c => ({ id: c.id, front: c.front, back: c.back, position: c.position }))
         });
     } catch (err) {
         console.error('Fetch set cards error:', err);
@@ -210,16 +218,17 @@ router.get('/flashcards/:setId', authenticate, (req, res) => {
 });
 
 // ─── DELETE /api/ai/flashcards/:setId — Delete a set ─────────────────────────
-router.delete('/flashcards/:setId', authenticate, (req, res) => {
+router.delete('/flashcards/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
         const setId  = parseInt(req.params.setId);
 
-        const result = db.prepare(
-            'DELETE FROM flashcard_sets WHERE id = ? AND user_id = ?'
-        ).run(setId, userId);
+        const result = await pool.query(
+            'DELETE FROM flashcard_sets WHERE id = $1 AND user_id = $2',
+            [setId, userId]
+        );
 
-        if (result.changes === 0) return res.status(404).json({ error: 'Set not found.' });
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Set not found.' });
 
         res.json({ message: 'Flashcard set deleted.' });
     } catch (err) {
@@ -237,11 +246,14 @@ router.post('/quiz', authenticate, async (req, res) => {
         if (!setId) return res.status(400).json({ error: 'setId is required.' });
 
         // Load the source text for the set
-        const set = db.prepare(
-            'SELECT id, title, subject, source_text FROM flashcard_sets WHERE id = ? AND user_id = ?'
-        ).get(setId, userId);
+        const setRes = await pool.query(
+            'SELECT id, title, subject, source_text FROM flashcard_sets WHERE id = $1 AND user_id = $2',
+            [setId, userId]
+        );
 
-        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+        if (setRes.rows.length === 0) return res.status(404).json({ error: 'Flashcard set not found.' });
+        const set = setRes.rows[0];
+
         if (!set.source_text || set.source_text.trim().length < 20) {
             return res.status(400).json({ error: 'This set has no source text to generate a quiz from.' });
         }
@@ -332,15 +344,27 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
         else if (pct >= 60)   coinsEarned = QUIZ_COINS.good;
         else if (pct >= 40)   coinsEarned = QUIZ_COINS.pass;
 
-        // Persist attempt
-        db.prepare(`
-            INSERT INTO quiz_attempts (user_id, set_id, score, total, coins_earned)
-            VALUES (?, ?, ?, ?, ?)
-        `).run(userId, setId, score, total, coinsEarned);
+        // Persist attempt and award coins
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        // Award coins
-        if (coinsEarned > 0) {
-            db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(coinsEarned, userId);
+            await client.query(`
+                INSERT INTO quiz_attempts (user_id, set_id, score, total, coins_earned)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [userId, setId, score, total, coinsEarned]);
+
+            // Award coins
+            if (coinsEarned > 0) {
+                await client.query('UPDATE users SET coins = coins + $1 WHERE id = $2', [coinsEarned, userId]);
+            }
+
+            await client.query('COMMIT');
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            throw err;
+        } finally {
+            client.release();
         }
 
         res.json({
@@ -358,20 +382,20 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
 });
 
 // ─── GET /api/ai/quiz/attempts/:setId — Get quiz history for a set ────────────
-router.get('/quiz/attempts/:setId', authenticate, (req, res) => {
+router.get('/quiz/attempts/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
         const setId  = parseInt(req.params.setId);
 
-        const attempts = db.prepare(`
+        const attemptsRes = await pool.query(`
             SELECT score, total, coins_earned, taken_at
             FROM quiz_attempts
-            WHERE user_id = ? AND set_id = ?
+            WHERE user_id = $1 AND set_id = $2
             ORDER BY taken_at DESC
             LIMIT 10
-        `).all(userId, setId);
+        `, [userId, setId]);
 
-        res.json({ attempts });
+        res.json({ attempts: attemptsRes.rows });
     } catch (err) {
         console.error('Quiz attempts error:', err);
         res.status(500).json({ error: 'Server error fetching quiz attempts.' });

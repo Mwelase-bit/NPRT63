@@ -10,6 +10,8 @@ const useGameState = () => {
         playerName: '',
         token: null,
         user: null,
+        authRestoring: true,  // true while we check a saved token on startup
+        backendOffline: false, // true if backend is unreachable
         builderCustomization: {
             gender: 'male',
             name: 'Builder',
@@ -30,25 +32,84 @@ const useGameState = () => {
         }
     });
 
-    // Load game state from storage on mount
+    // ── On mount: attempt to restore session from a saved JWT ───────────────
+    // This is what keeps you logged in after closing the laptop.
+    // If the token is still valid, /api/auth/me returns your full profile
+    // and we silently restore the session — no login screen needed.
     useEffect(() => {
-        const savedState = Storage.getGameState();
         const savedToken = localStorage.getItem('buildersFocus_token');
+        const savedState = Storage.getGameState();
 
+        if (!savedToken) {
+            // No token at all — go straight to registration
+            setGameState(prev => ({ ...prev, authRestoring: false }));
+            return;
+        }
+
+        // Restore any persisted game state (customisations, houses, etc.)
         if (savedState) {
-            setGameState(prevState => ({
-                ...prevState,
+            setGameState(prev => ({
+                ...prev,
                 ...savedState,
                 token: savedToken,
                 isBuilding: false,
                 isCollapsing: false
             }));
         }
-    }, []);
+
+        // Try to re-validate the token with the backend
+        window.api.auth.getMe()
+            .then(data => {
+                // Token is valid — restore full user session from backend
+                const user = data.user;
+                setGameState(prev => ({
+                    ...prev,
+                    token: savedToken,
+                    user: user,
+                    faculty: user.faculty,
+                    playerName: user.name,
+                    authRestoring: false,
+                    backendOffline: false,
+                    builderCustomization: {
+                        ...prev.builderCustomization,
+                        name: user.name,
+                        gender: user.gender || prev.builderCustomization.gender
+                    }
+                }));
+                console.log('✅ Session restored for:', user.name);
+            })
+            .catch(err => {
+                if (err.status === 401 || err.status === 404) {
+                    // Token is expired or user no longer exists — clear it
+                    console.warn('Saved token is invalid, clearing session.');
+                    localStorage.removeItem('buildersFocus_token');
+                    setGameState(prev => ({
+                        ...prev,
+                        token: null,
+                        user: null,
+                        faculty: null,
+                        playerName: '',
+                        authRestoring: false,
+                        backendOffline: false
+                    }));
+                } else {
+                    // Network error — backend is offline.
+                    // Keep the token and local state so the user can continue
+                    // once the server is back up, but show an offline warning.
+                    console.warn('Backend unreachable — running in offline mode.');
+                    setGameState(prev => ({
+                        ...prev,
+                        token: savedToken,
+                        authRestoring: false,
+                        backendOffline: true
+                    }));
+                }
+            });
+    }, []); // runs once on mount
 
     // Save game state to storage whenever it changes
     useEffect(() => {
-        const { token, user, ...stateToSave } = gameState;
+        const { token, user, authRestoring, backendOffline, ...stateToSave } = gameState;
         Storage.saveGameState(stateToSave);
         if (token) {
             localStorage.setItem('buildersFocus_token', token);
@@ -238,6 +299,7 @@ const useGameState = () => {
         login,
         logout
     };
+    // Note: authRestoring and backendOffline are spread from ...gameState above
 };
 
 window.useGameState = useGameState;
