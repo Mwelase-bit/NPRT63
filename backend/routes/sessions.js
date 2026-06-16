@@ -54,9 +54,13 @@ router.post('/', authenticate, async (req, res) => {
             }
             // else: already focused today — streak unchanged
 
-            // House only built if ≥ 45 minutes
+            // House building is cumulative across sessions (45 minutes per house)
             const MIN_HOUSE_SECONDS = 45 * 60;
-            const houseIncrement = elapsed >= MIN_HOUSE_SECONDS ? 1 : 0;
+            const currentTotal = user.total_focus_sec || 0;
+            const newTotal = currentTotal + elapsed;
+            const currentHouses = Math.floor(currentTotal / MIN_HOUSE_SECONDS);
+            const newHouses = Math.floor(newTotal / MIN_HOUSE_SECONDS);
+            const houseIncrement = newHouses - currentHouses;
 
             await pool.query(`
                 UPDATE users

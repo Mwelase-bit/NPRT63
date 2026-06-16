@@ -68,23 +68,28 @@ const App = () => {
         }
     }, [timer.isActive, gameState.isBuilding]);
 
-    // Automatically progress building stages based on ABSOLUTE elapsed time,
-    // not percentage — so a 5-min session stays at Stage 1 while a 2-hr session
-    // reaches Stage 4. This makes visual progress reflect real effort.
-    //   Stage 1 (foundation) : session starts
-    //   Stage 2 (walls)      : 15 minutes elapsed
-    //   Stage 3 (roof)       : 30 minutes elapsed
-    //   Stage 4 (complete)   : 45 minutes elapsed
+    // Automatically progress building stages based on cumulative elapsed time,
+    // so a 25-min session reaches Stage 2, and next session continues from there.
+    //   Stage 1 (foundation) : 0-15 minutes accumulated
+    //   Stage 2 (walls)      : 15-30 minutes accumulated
+    //   Stage 3 (roof)       : 30-45 minutes accumulated
+    //   Stage 4 (complete)   : reaches 45 minutes accumulated
     useEffect(() => {
         if (timer.isActive && timer.duration > 0) {
-            const elapsedSeconds = timer.duration - timer.timeLeft;
-            let nextStage = 1;
+            const currentSessionElapsed = timer.duration - timer.timeLeft;
+            const totalAccumulatedSeconds = (rewards.totalFocusTime || 0) + currentSessionElapsed;
+            
+            let houseProgressSeconds = totalAccumulatedSeconds % (45 * 60);
+            if (totalAccumulatedSeconds > 0 && houseProgressSeconds === 0) {
+                houseProgressSeconds = 45 * 60; // Keep it at 45 mins instead of wrapping to 0 instantly
+            }
 
-            if (elapsedSeconds >= 45 * 60) {       // 45 min
+            let nextStage = 1;
+            if (houseProgressSeconds >= 45 * 60) {       // 45 min
                 nextStage = 4;
-            } else if (elapsedSeconds >= 30 * 60) { // 30 min
+            } else if (houseProgressSeconds >= 30 * 60) { // 30 min
                 nextStage = 3;
-            } else if (elapsedSeconds >= 15 * 60) { // 15 min
+            } else if (houseProgressSeconds >= 15 * 60) { // 15 min
                 nextStage = 2;
             }
 
@@ -99,17 +104,20 @@ const App = () => {
                 if (window.SoundManager) window.SoundManager.tick();
             }
         }
-    }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState]);
+    }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState, rewards.totalFocusTime]);
 
     // Handle timer completion
-    // A house is only BUILT if the session was ≥ 45 minutes — matching Stage 4.
-    // Shorter sessions still award coins and update streak, but don't add a village house.
+    // A house is built cumulatively for every 45 minutes of total focus time.
     const MIN_HOUSE_SECONDS = 45 * 60; // 2700 s
     useEffect(() => {
         if (timer.isCompleted) {
-            const housEarned = timer.duration >= MIN_HOUSE_SECONDS;
+            const currentTotal = rewards.totalFocusTime || 0;
+            const newTotal = currentTotal + timer.duration;
+            const currentHouses = Math.floor(currentTotal / MIN_HOUSE_SECONDS);
+            const newHouses = Math.floor(newTotal / MIN_HOUSE_SECONDS);
+            const housesEarned = newHouses - currentHouses;
 
-            if (housEarned) {
+            for (let i = 0; i < housesEarned; i++) {
                 gameState.completeBuilding(); // adds to village
             }
             rewards.awardCoins(timer.duration);
