@@ -57,8 +57,21 @@ const useGameState = () => {
             }));
         }
 
-        // Try to re-validate the token with the backend
-        window.api.auth.getMe()
+        // Try to re-validate the token with the backend.
+        // Race against an 8-second timeout so a cold Render start (free tier sleeps)
+        // doesn't leave authRestoring=true forever and freeze the loading screen.
+        const authCheck = Promise.race([
+            window.api.auth.getMe(),
+            new Promise((_, reject) =>
+                setTimeout(() => {
+                    const e = new Error('Backend startup timeout — server is waking up.');
+                    e.status = 0;   // triggers the "offline" branch in catch below
+                    reject(e);
+                }, 8000)
+            )
+        ]);
+
+        authCheck
             .then(data => {
                 // Token is valid — restore full user session from backend
                 const user = data.user;
