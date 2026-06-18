@@ -2601,12 +2601,15 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             
             // Don't destroy if clicking on UI elements
             const target = event.target;
-            const isUIElement = target.closest('.timer-panel') || 
-                               target.closest('.ui-overlay') || 
+            const isUIElement = target.closest('.timer-panel') ||
+                               target.closest('.ui-overlay') ||
                                target.closest('.nav-tabs') ||
                                target.closest('.panel-content') ||
+                               target.closest('.study-panel-float') ||
+                               target.closest('.study-panel') ||
                                target.closest('button') ||
                                target.closest('input') ||
+                               target.closest('textarea') ||
                                target.closest('label') ||
                                target.closest('.mobile-menu-toggle');
             
