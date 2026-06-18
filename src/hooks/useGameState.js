@@ -38,10 +38,12 @@ const useGameState = () => {
     // and we silently restore the session — no login screen needed.
     useEffect(() => {
         const savedToken = localStorage.getItem('buildersFocus_token');
+        if (window._dbgUpdate) window._dbgUpdate('🔑 Auth check — token: ' + (savedToken ? 'found' : 'none'));
         const savedState = Storage.getGameState();
 
         if (!savedToken) {
             // No token at all — go straight to registration
+            if (window._dbgUpdate) window._dbgUpdate('📝 No token → show registration');
             setGameState(prev => ({ ...prev, authRestoring: false }));
             return;
         }
@@ -71,10 +73,13 @@ const useGameState = () => {
             )
         ]);
 
+        if (window._dbgUpdate) window._dbgUpdate('⏳ Token found — calling /api/auth/me (8s timeout)...');
+
         authCheck
             .then(data => {
                 // Token is valid — restore full user session from backend
                 const user = data.user;
+                if (window._dbgUpdate) window._dbgUpdate('✅ Token valid — welcome ' + (user?.name || '?'));
                 setGameState(prev => ({
                     ...prev,
                     token: savedToken,
@@ -94,6 +99,7 @@ const useGameState = () => {
             .catch(err => {
                 if (err.status === 401 || err.status === 404) {
                     // Token is expired or user no longer exists — clear it
+                    if (window._dbgUpdate) window._dbgUpdate('🚫 Token rejected (401/404) → show registration');
                     console.warn('Saved token is invalid, clearing session.');
                     localStorage.removeItem('buildersFocus_token');
                     setGameState(prev => ({
@@ -107,8 +113,7 @@ const useGameState = () => {
                     }));
                 } else {
                     // Network error — backend is offline.
-                    // Keep the token and local state so the user can continue
-                    // once the server is back up, but show an offline warning.
+                    if (window._dbgUpdate) window._dbgUpdate('⚡ Backend unreachable (err: ' + err.message + ') → offline mode');
                     console.warn('Backend unreachable — running in offline mode.');
                     setGameState(prev => ({
                         ...prev,

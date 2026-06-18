@@ -14,7 +14,7 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
+  ssl: (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('render.com'))
     ? { rejectUnauthorized: false }
     : false
 });
@@ -43,6 +43,8 @@ async function initDatabase() {
         last_focus_date TEXT,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS total_focus_sec INTEGER NOT NULL DEFAULT 0;
 
       -- Focus sessions: each recorded focus timer event
       CREATE TABLE IF NOT EXISTS focus_sessions (

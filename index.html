@@ -5,19 +5,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Builder's Focus - 3D Productivity Game</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/feather-icons@4.29.0/dist/feather.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="src/styles/App.css?v=20260507">
+    <script src="vendor/react.production.min.js"></script>
+    <script src="vendor/react-dom.production.min.js"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/babel.min.js"></script>
+    <script src="vendor/feather.min.js"></script>
+    <link href="vendor/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="src/styles/App.css?v=20260618b">
 </head>
 
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <!-- DEBUG OVERLAY: visible immediately, before any React/Babel runs -->
+    <div id="debug-overlay" style="
+        position:fixed; bottom:0; left:0; right:0;
+        background:rgba(0,0,0,0.85); color:#00ff88;
+        font-family:monospace; font-size:13px;
+        padding:10px 14px; z-index:2147483647;
+        line-height:1.6; pointer-events:none;
+    ">
+        <strong style="color:#fff">BUILDHAUS DEBUG</strong>
+        &nbsp;|&nbsp;<span id="dbg-status">⏳ Waiting for JS...</span>
+    </div>
+
+    <script>
+        // Plain JS (no Babel/React) - runs immediately after <head> scripts finish
+        const dbg = (msg) => {
+            const el = document.getElementById('dbg-status');
+            if (el) el.textContent = msg;
+            console.log('[DBG]', msg);
+        };
+        window._dbgUpdate = dbg;
+
+        // Show errors on screen without needing DevTools
+        window.showErrorPlain = function(msg) {
+            dbg('❌ ' + msg.slice(0, 150));
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:40px;background:#1a0000;color:#ff6b6b;padding:24px;font-family:monospace;font-size:13px;z-index:9999998;overflow:auto;white-space:pre-wrap';
+            errDiv.textContent = '🔴 BUILDHAUS ERROR\n\n' + msg;
+            document.body.appendChild(errDiv);
+        };
+
+        // Catch runtime JS errors (including errors thrown by Babel-compiled scripts)
+        window.addEventListener('error', function(e) {
+            const src = e.filename ? e.filename.split('/').pop() : '?';
+            const msg = (e.error ? e.error.stack : e.message) || String(e);
+            window.showErrorPlain('[' + src + ':' + e.lineno + ']\n' + msg);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            window.showErrorPlain('Unhandled promise rejection:\n' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)));
+        });
+
+        // Intercept console.error to surface Babel compile errors in the debug bar
+        var _origConsoleError = console.error.bind(console);
+        console.error = function() {
+            _origConsoleError.apply(console, arguments);
+            var msg = Array.prototype.slice.call(arguments).map(function(a) {
+                return (a && a.stack) ? a.stack : String(a);
+            }).join(' ');
+            if (msg.includes('SyntaxError') || msg.includes('Babel') || msg.includes('transform') || msg.includes('Cannot read')) {
+                dbg('❌ Error: ' + msg.slice(0, 160));
+                window.showErrorPlain(msg);
+            }
+        };
+
+        // By this point all <script src> in <head> have already loaded (or failed).
+        // Report which vendor globals are present.
+        const vR = typeof React     !== 'undefined' ? '✓' : '✗';
+        const vRD= typeof ReactDOM  !== 'undefined' ? '✓' : '✗';
+        const vB = typeof Babel     !== 'undefined' ? '✓' : '✗';
+        const vT = typeof THREE     !== 'undefined' ? '✓' : '✗';
+        const vF = typeof feather   !== 'undefined' ? '✓' : '✗';
+        dbg('Vendors — React:' + vR + ' ReactDOM:' + vRD + ' Babel:' + vB + ' THREE:' + vT + ' Feather:' + vF);
+    </script>
+
+    <script>
+        // Configure Babel before it processes any <script type="text/babel"> tags.
+        if (window.Babel && Babel.availablePresets && Babel.availablePresets['react']) {
+
+            // 1. Classic JSX runtime: use React.createElement instead of the automatic
+            //    runtime which emits `import { jsx } from 'react/jsx-runtime'` (ES module).
+            Babel.registerPreset('react-classic', {
+                presets: [
+                    [Babel.availablePresets['react'], { runtime: 'classic' }]
+                ]
+            });
+
+            // 2. IIFE wrapper: Babel appends all compiled scripts into the same execution
+            //    context, so `const` declared in one file conflicts with `const` in another.
+            //    Wrapping each file in an IIFE gives it a private scope.
+            //    window.* assignments inside the IIFE still reach the global object.
+            Babel.registerPlugin('iife-wrap', function(babelInstance) {
+                var t = babelInstance.types;
+                return {
+                    visitor: {
+                        Program: {
+                            exit: function(path) {
+                                var stmts = path.node.body;
+                                if (!stmts.length) return;
+                                var wrapped = t.expressionStatement(
+                                    t.callExpression(
+                                        t.functionExpression(null, [], t.blockStatement(stmts)),
+                                        []
+                                    )
+                                );
+                                path.node.body = [wrapped];
+                            }
+                        }
+                    }
+                };
+            });
+
+            window._dbgUpdate('⚙️ Babel configured — loading app scripts...');
+        } else {
+            window._dbgUpdate('⚠️ Babel.availablePresets.react not found — check babel version');
+        }
+    </script>
+
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap">
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
         // Three.js utility components for React
@@ -153,68 +259,99 @@
         window.ThreeCanvas = ThreeCanvas;
     </script>
 
-    <script type="text/babel" src="src/utils/sounds.js?v=20260617a"></script>
-    <script type="text/babel" src="src/utils/notifications.js?v=20260617a"></script>
-    <script type="text/babel" src="src/utils/api.js?v=20260617a"></script>
-    <script type="text/babel" src="src/utils/storage.js?v=20260617a"></script>
-    <script type="text/babel" src="src/utils/achievements.js?v=20260617a"></script>
-    <script type="text/babel" src="src/utils/coins.js?v=20260617a"></script>
-    <script type="text/babel" src="src/data/builderCustomizations.js?v=20260617a"></script>
-    <script type="text/babel" src="src/data/houseTypes.js?v=20260617a"></script>
-    <script type="text/babel" src="src/hooks/useGameState.js?v=20260618a"></script>
-    <script type="text/babel" src="src/hooks/useTimer.js?v=20260617a"></script>
-    <script type="text/babel" src="src/hooks/useRewards.js?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/TimerPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/RewardPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/ProfilePanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/CommunityPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/ShopPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/AchievementPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/StudyPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/components/GameScene.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/hooks/useFaculty.js?v=20260617a"></script>
-    <script type="text/babel" src="src/components/UI/RegistrationModal.jsx?v=20260617a"></script>
-    <script type="text/babel" src="src/App.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/sounds.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/notifications.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/api.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/storage.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/achievements.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/coins.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/builderCustomizations.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/houseTypes.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useGameState.js?v=20260618b"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useTimer.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useRewards.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/TimerPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RewardPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ProfilePanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/CommunityPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ShopPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/AchievementPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useFaculty.js?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20260617a"></script>
 
-    <script type="text/babel">
-        console.log('About to render App...');
-        console.log('Root element:', document.getElementById('root'));
-        console.log('App component:', window.App);
-
-        try {
-            ReactDOM.render(<App />, document.getElementById('root'));
-            console.log('App rendered successfully');
-        } catch (error) {
-            console.error('Error rendering App:', error);
-        }
-
-        // Override feather.replace to prevent tearing React's virtual DOM
-        const safeFeatherReplace = () => {
-            if (!window.feather) return;
-            document.querySelectorAll('i[data-feather]').forEach(el => {
-                if (el.hasAttribute('data-replaced')) return;
-                const name = el.getAttribute('data-feather');
-                if (window.feather.icons[name]) {
-                    const attrs = {};
-                    if (el.style.width) attrs.width = el.style.width;
-                    if (el.style.height) attrs.height = el.style.height;
-                    if (el.style.color) attrs.color = el.style.color;
-                    
-                    el.innerHTML = window.feather.icons[name].toSvg(attrs);
-                    el.setAttribute('data-replaced', 'true');
-                    el.style.display = 'inline-flex';
-                    el.style.alignItems = 'center';
-                    el.style.justifyContent = 'center';
-                }
-            });
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap">
+        const showError = window.showErrorPlain || function(msg) {
+            const el = document.createElement('div');
+            el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:40px;background:#1a0000;color:#ff6b6b;padding:24px;font-family:monospace;font-size:14px;z-index:9999999;overflow:auto;white-space:pre-wrap';
+            el.textContent = '🔴 BUILDHAUS ERROR\n\n' + msg;
+            document.body.appendChild(el);
         };
-        window.feather.replace = safeFeatherReplace;
 
-        // Initialize Feather icons
-        setTimeout(() => {
-            safeFeatherReplace();
-            console.log('Feather icons safely initialized');
-        }, 100);
+        // Babel loads external <script type="text/babel"> files via async XHR,
+        // so this inline script can run before those files have executed.
+        // Poll until all required globals are present, then mount.
+        const REQUIRED = ['App','useGameState','useTimer','useRewards','useFaculty',
+            'TimerPanel','RewardPanel','ProfilePanel','CommunityPanel','ShopPanel',
+            'AchievementPanel','StudyPanel','GameScene','RegistrationModal','ThreeCanvas',
+            'Storage','ACHIEVEMENTS','SPU_FACULTIES','api'];
+
+        const mountApp = () => {
+            window._dbgUpdate('🚀 Mounting React app...');
+            try {
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<App />);
+                window._dbgUpdate('⚛️ React mounted — waiting for auth...');
+
+                // Safe feather icon replacement that doesn't tear React's vDOM
+                const safeFeatherReplace = () => {
+                    if (!window.feather) return;
+                    document.querySelectorAll('i[data-feather]').forEach(el => {
+                        if (el.hasAttribute('data-replaced')) return;
+                        const name = el.getAttribute('data-feather');
+                        if (window.feather.icons[name]) {
+                            const attrs = {};
+                            if (el.style.width) attrs.width = el.style.width;
+                            if (el.style.height) attrs.height = el.style.height;
+                            if (el.style.color) attrs.color = el.style.color;
+                            el.innerHTML = window.feather.icons[name].toSvg(attrs);
+                            el.setAttribute('data-replaced', 'true');
+                            el.style.display = 'inline-flex';
+                            el.style.alignItems = 'center';
+                            el.style.justifyContent = 'center';
+                        }
+                    });
+                };
+                window.feather.replace = safeFeatherReplace;
+                setTimeout(safeFeatherReplace, 100);
+            } catch (error) {
+                console.error('Error rendering App:', error);
+                showError(error.stack || error.message);
+                window._dbgUpdate('❌ React mount failed: ' + error.message);
+            }
+        };
+
+        const startTime = Date.now();
+        const pollForGlobals = () => {
+            const missing = REQUIRED.filter(k => !window[k]);
+            if (missing.length === 0) {
+                window._dbgUpdate('✅ All globals ready — mounting...');
+                mountApp();
+                return;
+            }
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 15000) {
+                showError('Timed out after 15s waiting for scripts.\nStill missing:\n  ' + missing.join('\n  '));
+                window._dbgUpdate('❌ Timeout — missing: ' + missing.join(', '));
+                return;
+            }
+            window._dbgUpdate('⏳ Loading (' + Math.round(elapsed/1000) + 's): ' + missing.slice(0, 4).join(', ') + (missing.length > 4 ? '…' : ''));
+            setTimeout(pollForGlobals, 200);
+        };
+
+        pollForGlobals();
     </script>
 </body>
 
