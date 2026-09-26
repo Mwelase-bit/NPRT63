@@ -1,0 +1,91 @@
+I want to design a visually appealing 3D mobile game using Unity (C#) or Godot (GDScript). The game is called “Builder’s Focus” (working title). Below are the full design specifications. Please generate starter code, assets, and structure for this game:
+
+---
+
+## Game Concept
+A small builder character constructs a house when the player presses a “Study/Focus Button.” The player first sets a focus time (e.g., 10 min, 30 min, 1 hr). If the player does not touch the phone until the timer is complete, the builder progresses on the house. If the player interrupts early (touches the phone), the house is demolished in front of them.
+
+---
+
+## Core Gameplay Loop
+1. Player sets a focus time.
+2. Press “Study” → builder starts building.
+3. Timer runs → house builds in stages.
+4. If the timer completes → progress is saved and house stands.
+5. If interrupted → house collapses.
+
+---
+
+## Builder Character (Customizable)
+- **Gender Selection:** At the start, players can choose a **male or female builder**.
+- **Appearance:**
+  - Cartoonish, low-poly 3D style.
+  - **Male Builder:** Hard hat, work boots, tool belt, bright-colored overalls (blue or orange).
+  - **Female Builder:** Hard hat, ponytail or short hair, tool belt, bright-colored overalls (pink, green, or yellow).
+- **Animations:**
+  - Hammering nails into wood.
+  - Carrying bricks/cement blocks.
+  - Placing roof tiles.
+  - Resting animation when timer ends.
+- **Demolition Animation:** Builder shows frustration or disappointment (e.g., hands on head, shrug) as the house collapses.
+
+---
+
+## Game Mechanics
+- **Timer System:** Player chooses duration → countdown starts.
+- **Progress Tracking:** House builds in stages (foundation → walls → roof → finishing touches).
+- **Demolition System:** If player interrupts → play destruction animation.
+- **Reward System (optional):** Coins, XP, unlockable houses, or badges for streaks.
+
+---
+
+## Visual/Art Style
+- Cartoonish, low-poly 3D style.
+- Environment: small construction lot (grass, fence, toolbox).
+- House models: multiple build stages (empty lot → foundation → walls → roof → complete house).
+- Collapse animation with dust cloud and debris.
+
+---
+
+## Technical Requirements
+- Use Unity (C# preferred) or Godot.
+- Core systems to implement:
+  - Timer with input lock.
+  - Progress bar + build stage triggers.
+  - Interruption detection (phone touch or button press).
+  - Character customization: male or female builder selection.
+  - Animation controller for builder + house.
+- Mobile compatibility (Android/iOS).
+- Use placeholders if assets are missing.
+
+---
+
+## Development Phases
+1. **Prototype (Weeks 1–2):**
+   - Timer + progress logic with placeholders.
+   - Simple cube house stages.
+2. **Core Gameplay (Weeks 3–5):**
+   - Replace placeholders with real 3D models + animations.
+   - Add builder gender selection.
+   - Add demolish animation.
+3. **Polish (Weeks 6–8):**
+   - Add UI (progress bar, timer selector, gender selector).
+   - Add sound effects (hammering, collapse, cheers).
+   - Improve visuals of environment.
+4. **Extras (Stretch Goals):**
+   - Reward system (coins, streaks).
+   - Multiple houses forming a village.
+   - Leaderboards.
+
+---
+
+## Deliverables from this Prompt
+- Game project structure (Unity C# or Godot).
+- Scripts for:
+  - Timer logic.
+  - Progress bar & house stages.
+  - Detecting interruptions.
+  - Triggering build/demolish animations.
+  - Gender selection system for builder (male/female).
+- Placeholder assets for builder and house stages.
+- Clear comments in code for future expansion.
