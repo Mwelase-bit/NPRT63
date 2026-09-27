@@ -1,0 +1,486 @@
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// Import components and hooks from window (set by other scripts in Babel standalone environment)
+const useGameState = window.useGameState;
+const useTimer = window.useTimer;
+const useRewards = window.useRewards;
+const useFaculty = window.useFaculty;
+const TimerPanel = window.TimerPanel;
+const RewardPanel = window.RewardPanel;
+const ProfilePanel = window.ProfilePanel;
+const CommunityPanel = window.CommunityPanel;
+const ShopPanel = window.ShopPanel;
+const GameScene = window.GameScene;
+const RegistrationModal = window.RegistrationModal;
+const StudyPanel = window.StudyPanel;
+const StudyLogo = window.StudyLogo;
+const ErrorBoundary = ({ children, fallback }) => {
+    const [hasError, setHasError] = useState(false);
+
+    useEffect(() => {
+        const handleError = (error) => {
+            console.error('ErrorBoundary caught an error:', error);
+            setHasError(true);
+        };
+
+        window.addEventListener('error', handleError);
+        return () => window.removeEventListener('error', handleError);
+    }, []);
+
+    if (hasError) return fallback;
+    return children;
+};
+
+const App = () => {
+    const gameState = useGameState();
+    const timer = useTimer();
+    const rewards = useRewards(gameState, timer);
+    const faculty = useFaculty(gameState, rewards);
+
+    const [activePanel, setActivePanel] = useState('timer');
+    const [interruptionDetected, setInterruptionDetected] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    // Study AI floating panel — one instance for the whole app, controlled here
+    // so the nav tab and the floating button always agree.
+    const [studyOpen, setStudyOpen] = useState(false);
+
+    // All automated interruption detection has been removed.
+    // The focus session ends only when:
+    //   1. The timer naturally completes ✅
+    //   2. The user clicks "Stop Session" ✅
+
+    // Request notification permission after login/registration
+    useEffect(() => {
+        if (gameState.token && window.NotificationManager) {
+            window.NotificationManager.requestPermission();
+            // Start streak reminder scheduler
+            window.NotificationManager.startStreakReminder(
+                () => rewards.lastFocusDate,
+                () => rewards.streak
+            );
+        }
+        return () => {
+            if (window.NotificationManager) window.NotificationManager.stopStreakReminder();
+        };
+    }, [gameState.token]);
+
+    // Force building to start when timer becomes active
+    useEffect(() => {
+        if (timer.isActive && !gameState.isBuilding) {
+            console.log('Timer is active but building is not - forcing building to start');
+            gameState.startBuilding();
+        }
+    }, [timer.isActive, gameState.isBuilding]);
+
+    // Automatically progress building stages based on cumulative elapsed time,
+    // so a 25-min session reaches Stage 2, and next session continues from there.
+    //   Stage 1 (foundation) : 0-15 minutes accumulated
+    //   Stage 2 (walls)      : 15-30 minutes accumulated
+    //   Stage 3 (roof)       : 30-45 minutes accumulated
+    //   Stage 4 (complete)   : reaches 45 minutes accumulated
+    useEffect(() => {
+        if (timer.isActive && timer.duration > 0) {
+            const currentSessionElapsed = timer.duration - timer.timeLeft;
+            const totalAccumulatedSeconds = (rewards.totalFocusTime || 0) + currentSessionElapsed;
+            
+            let houseProgressSeconds = totalAccumulatedSeconds % (45 * 60);
+            if (totalAccumulatedSeconds > 0 && houseProgressSeconds === 0) {
+                houseProgressSeconds = 45 * 60; // Keep it at 45 mins instead of wrapping to 0 instantly
+            }
+
+            let nextStage = 1;
+            if (houseProgressSeconds >= 45 * 60) {       // 45 min
+                nextStage = 4;
+            } else if (houseProgressSeconds >= 30 * 60) { // 30 min
+                nextStage = 3;
+            } else if (houseProgressSeconds >= 15 * 60) { // 15 min
+                nextStage = 2;
+            }
+
+            if (gameState.buildStage !== nextStage) {
+                gameState.updateBuildStage(nextStage);
+                // 🔊 Sound: build stage advanced
+                if (window.SoundManager) window.SoundManager.buildStageUp();
+            }
+
+            // 🔊 Tick sound for last 10 seconds
+            if (timer.timeLeft <= 10 && timer.timeLeft > 0) {
+                if (window.SoundManager) window.SoundManager.tick();
+            }
+        }
+    }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState, rewards.totalFocusTime]);
+
+    // Handle timer completion
+    // A house is built cumulatively for every 45 minutes of total focus time.
+    const MIN_HOUSE_SECONDS = 45 * 60; // 2700 s
+    useEffect(() => {
+        if (timer.isCompleted) {
+            const currentTotal = rewards.totalFocusTime || 0;
+            const newTotal = currentTotal + timer.duration;
+            const currentHouses = Math.floor(currentTotal / MIN_HOUSE_SECONDS);
+            const newHouses = Math.floor(newTotal / MIN_HOUSE_SECONDS);
+            const housesEarned = newHouses - currentHouses;
+
+            for (let i = 0; i < housesEarned; i++) {
+                gameState.completeBuilding(); // adds to village
+            }
+            rewards.awardCoins(timer.duration);
+            rewards.updateStreak();
+
+            // 🔊 Sound: session complete + building done
+            if (window.SoundManager) {
+                window.SoundManager.sessionComplete();
+                setTimeout(() => window.SoundManager.coinEarned(), 600);
+            }
+            // 📱 Notification: session complete
+            if (window.NotificationManager) {
+                window.NotificationManager.sessionComplete(timer.duration);
+            }
+
+            // Sync completed session to backend (backend also gates houses_built on 45 min)
+            // then re-read authoritative stats as the single source of truth.
+            syncSessionToBackend(timer.duration, timer.duration, true).then(() => {
+                rewards.syncWithBackend();
+            });
+
+            // Sync new achievements unlocked from this session
+            rewards.allAchievements
+                .filter(a => a.unlocked && a.unlockedAt && (Date.now() - a.unlockedAt) < 10000)
+                .forEach(a => {
+                    window.api.achievements.unlock(a.id).catch(() => { });
+                    // 🔊 + 📱 Achievement notification
+                    if (window.SoundManager) window.SoundManager.achievementUnlocked();
+                    if (window.NotificationManager) window.NotificationManager.achievementUnlocked(a.title || a.name);
+                });
+
+            setInterruptionDetected(false);
+            sessionStartRef.current = null;
+        }
+    }, [timer.isCompleted]);
+
+    // Handle interruption effects
+    useEffect(() => {
+        if (interruptionDetected) {
+            // (The demolish sound is played in handleDemolish, inside the click
+            //  that caused the collapse, so browsers allow the audio.)
+            // 📱 Notification: interrupted
+            if (window.NotificationManager) window.NotificationManager.sessionInterrupted();
+
+            // Sync interrupted session to backend
+            // Whole seconds, never more than the planned duration (the API rejects both)
+            const elapsed = sessionStartRef.current
+                ? Math.min(timer.duration, Math.floor((Date.now() - sessionStartRef.current) / 1000))
+                : 0;
+            syncSessionToBackend(timer.duration, elapsed, false);
+            sessionStartRef.current = null;
+
+            setTimeout(() => {
+                setInterruptionDetected(false);
+            }, 3000);
+        }
+    }, [interruptionDetected]);
+
+    // Track when a session started (for elapsed time calc on interruption)
+    const sessionStartRef = React.useRef(null);
+
+    // Called by GameScene the moment a building starts collapsing.
+    // Plays the crash sound synchronously (still inside the user's click, so the
+    // AudioContext is allowed to start) and flags the interruption so the
+    // session is recorded as interrupted.
+    const handleDemolish = useCallback(() => {
+        if (window.SoundManager) window.SoundManager.demolish();
+        setInterruptionDetected(true);
+    }, []);
+
+    const startFocusSession = async (duration) => {
+        console.log('Starting focus session with duration:', duration);
+
+        // Record when session started (for elapsed-time tracking)
+        sessionStartRef.current = Date.now();
+
+        // Reset building state first
+        gameState.resetBuilding();
+
+        // Start timer
+        timer.start(duration);
+
+        // Start building
+        gameState.startBuilding();
+
+        // 🔊 Sound: session started
+        if (window.SoundManager) window.SoundManager.sessionStart();
+
+        setInterruptionDetected(false);
+    };
+
+    // POST a finished or interrupted session to the backend
+    const syncSessionToBackend = async (duration, elapsed, completed) => {
+        if (!gameState.token) return; // Only sync when logged in
+        try {
+            await window.api.sessions.create({ duration, elapsed, completed });
+            console.log(`Session synced: completed=${completed}, elapsed=${elapsed}s`);
+        } catch (err) {
+            console.warn('Failed to sync session to backend:', err.message);
+        }
+    };
+
+    return (
+        <div className="app">
+            {/* ⏳ Session-restore loading screen — shown while we verify the saved JWT */}
+            {gameState.authRestoring && (
+                <div style={{
+                    position: 'fixed', inset: 0,
+                    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    zIndex: 99999, color: 'white',
+                    fontFamily: "'Inter', sans-serif"
+                }}>
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🏰</div>
+                    <h2 style={{ margin: '0 0 10px', fontWeight: 700 }}>BUILDHAUS</h2>
+                    <p style={{ opacity: 0.6, margin: '0 0 30px' }}>Restoring your session...</p>
+                    <div style={{
+                        width: '48px', height: '48px',
+                        border: '4px solid rgba(255,255,255,0.2)',
+                        borderTop: '4px solid #4CAF50',
+                        borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite'
+                    }} />
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+            )}
+
+            {/* ⚠️ Backend offline warning banner */}
+            {!gameState.authRestoring && gameState.backendOffline && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0,
+                    background: 'linear-gradient(90deg, #ff9800, #f57c00)',
+                    color: 'white', textAlign: 'center',
+                    padding: '10px 20px', zIndex: 9998,
+                    fontFamily: "'Inter', sans-serif", fontSize: '0.9em',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.4)'
+                }}>
+                    ⚠️ <strong>Server offline</strong> — Start the backend server to save progress &amp; see community data.
+                    &nbsp;<button
+                        onClick={() => window.location.reload()}
+                        style={{
+                            background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.5)',
+                            color: 'white', borderRadius: '6px', padding: '3px 12px',
+                            cursor: 'pointer', marginLeft: '10px', fontWeight: 600
+                        }}
+                    >Retry</button>
+                </div>
+            )}
+
+            {/* Registration Modal — shown only when there is truly no active session */}
+            {!gameState.authRestoring && !gameState.token && !gameState.backendOffline && (
+                <RegistrationModal gameState={gameState} />
+            )}
+
+            {/* 3D Game Scene */}
+            <div className="game-canvas">
+                <ErrorBoundary fallback={
+                    <div style={{
+                        width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        background: '#1a1a2e', color: 'white'
+                    }}>
+                        <h3>🌀 3D Engine Unavailable</h3>
+                        <p style={{ opacity: 0.6 }}>The graphics engine encountered a problem.</p>
+                    </div>
+                }>
+                    <GameScene
+                        gameState={gameState}
+                        timer={timer}
+                        interruptionDetected={interruptionDetected}
+                        housesBuilt={rewards.housesBuilt || 0}
+                        onDemolish={handleDemolish}
+                    />
+                </ErrorBoundary>
+            </div>
+
+            {/* UI Overlay */}
+            {!timer.isActive ? (
+                <div className="ui-overlay">
+                    <button
+                        className="mobile-menu-toggle"
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    >
+                        <i data-feather="menu"></i>
+                    </button>
+
+                    <div className={`nav-tabs ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+                        <button
+                            className={`nav-tab ${activePanel === 'timer' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('timer');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="clock"></i>
+                            Focus
+                        </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'rewards' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('rewards');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="award"></i>
+                            Rewards
+                        </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'profile' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('profile');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="user"></i>
+                            Profile
+                        </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'community' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('community');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="users"></i>
+                            Community
+                        </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'shop' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('shop');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="shopping-bag"></i>
+                            Shop
+                        </button>
+                        <button
+                            className={`nav-tab nav-tab-study ${studyOpen ? 'active' : ''}`}
+                            onClick={() => {
+                                // Study AI lives in the floating panel — the tab just toggles it
+                                setStudyOpen(o => !o);
+                                setMobileMenuOpen(false);
+                            }}
+                            aria-pressed={studyOpen}
+                        >
+                            <StudyLogo size={18} className="nav-tab-logo" />
+                            Study AI
+                        </button>
+                    </div>
+
+                    <div className="panel-content">
+                        {activePanel === 'timer' && (
+                            <TimerPanel
+                                timer={timer}
+                                onStartSession={startFocusSession}
+                                gameState={gameState}
+                            />
+                        )}
+
+                        {activePanel === 'rewards' && (
+                            <RewardPanel rewards={rewards} />
+                        )}
+
+                        {activePanel === 'profile' && (
+                            <ProfilePanel
+                                gameState={gameState}
+                                rewards={rewards}
+                            />
+                        )}
+
+                        {activePanel === 'community' && (
+                            <CommunityPanel
+                                gameState={gameState}
+                                rewards={rewards}
+                                faculty={faculty}
+                            />
+                        )}
+
+                        {activePanel === 'shop' && (
+                            <ShopPanel
+                                gameState={gameState}
+                                rewards={rewards}
+                            />
+                        )}
+                    </div>
+                </div>
+            ) : (
+                // Timer is active — show timer bottom-left + Study panel bottom-right
+                <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    zIndex: 200,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-end',
+                    pointerEvents: 'auto',
+                    padding: '0 18px 18px 18px',
+                    gap: '16px'
+                }}>
+                    {/* Timer — left side (Study AI floats bottom-right on its own) */}
+                    <TimerPanel
+                        timer={timer}
+                        onStartSession={startFocusSession}
+                        gameState={gameState}
+                    />
+                </div>
+            )}
+
+            {/* Study AI — ONE floating button + panel for every screen (idle and
+                during a focus session), so the logo, position and state never
+                change as you move around the app. Hidden while logging in. */}
+            {!gameState.authRestoring && gameState.token && (
+                <StudyPanel
+                    currentUser={{ token: gameState.token }}
+                    apiBase={window.API_BASE || ''}
+                    isOpen={studyOpen}
+                    onOpenChange={setStudyOpen}
+                    timerActive={timer.isActive}
+                />
+            )}
+
+            {/* Status Bar - TEMPORARILY COMMENTED OUT */}
+            {/*
+            <div className="status-bar">
+                <div className="coins">
+                    <i data-feather="dollar-sign"></i>
+                    {rewards.coins}
+                </div>
+                <div className="streak">
+                    <i data-feather="zap"></i>
+                    {rewards.streak} day streak
+                </div>
+            </div>
+            
+            <div className="interruption-warning">
+                <div className="warning-content">
+                    <i data-feather="alert-triangle"></i>
+                    <h3>Focus Interrupted!</h3>
+                    <p>Your house is being demolished...</p>
+                </div>
+            </div>
+            */}
+
+            {/* Mobile Menu Overlay - TEMPORARILY COMMENTED OUT */}
+            {/*
+            {mobileMenuOpen && (
+                <div 
+                    className="mobile-menu-overlay"
+                    onClick={() => setMobileMenuOpen(false)}
+                />
+            )}
+            */}
+        </div>
+    );
+};
+
+window.App = App;

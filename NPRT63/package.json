@@ -1,0 +1,31 @@
+{
+  "name": "aetherdrift-2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "server": "node backend/server.js",
+    "dev": "npx serve -l 3000",
+    "test": "node --test --test-concurrency=1 \"backend/tests/validation/*.test.js\" \"backend/tests/frontend/*.test.js\"",
+    "test:e2e": "node --test \"backend/tests/e2e/*.test.js\"",
+    "test:live": "node backend/tests/api.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/standalone": "^8.0.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.13.3",
+    "ws": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
