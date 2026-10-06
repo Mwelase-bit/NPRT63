@@ -9,7 +9,7 @@ const { isIntInRange, parseId } = require('../middleware/validate');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+const GROQ_MODEL   = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 // Coins awarded per flashcard set generated (game integration)
 const COINS_PER_SET = 10;
