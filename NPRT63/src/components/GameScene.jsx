@@ -2610,19 +2610,18 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
             }
             
             // Don't destroy if clicking on UI elements
+            // Use composedPath(), captured at dispatch time: React may re-render
+            // (and detach) the clicked node before this document listener runs,
+            // e.g. opening a flashcard set or answering a quiz question in the
+            // Study AI panel. closest() on a detached node finds nothing, so the
+            // click would wrongly count as a distraction.
             const target = event.target;
-            const isUIElement = target.closest('.timer-panel') ||
-                               target.closest('.ui-overlay') ||
-                               target.closest('.nav-tabs') ||
-                               target.closest('.panel-content') ||
-                               target.closest('.study-panel-float') ||
-                               target.closest('.study-panel') ||
-                               target.closest('.study-panel-fab') ||
-                               target.closest('button') ||
-                               target.closest('input') ||
-                               target.closest('textarea') ||
-                               target.closest('label') ||
-                               target.closest('.mobile-menu-toggle');
+            const uiSelector = '.timer-panel, .ui-overlay, .nav-tabs, .panel-content, ' +
+                               '.study-panel-float, .study-panel, .study-panel-fab, ' +
+                               'button, input, textarea, label, .mobile-menu-toggle';
+            const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+            const isUIElement = path.some(n => n.matches && n.matches(uiSelector)) ||
+                               !!(target.closest && target.closest(uiSelector));
             
             if (isUIElement) {
                 console.log('UI element clicked, not destroying building');
