@@ -391,8 +391,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             createMainCastle(buildingGroup);
         }
         
-        // Mansion = a grander, scaled-up townhouse
-        if (type === 'mansion') buildingGroup.scale.setScalar(1.4);
+        // Mansion = a wider, grander townhouse
+        if (type === 'mansion') buildingGroup.scale.set(1.35, 1, 1.35);
         
         // All children start hidden (opacity 0)
         buildingGroup.traverse(child => {
