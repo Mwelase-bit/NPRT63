@@ -3,10 +3,8 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
     const [selectedMinutes, setSelectedMinutes] = useState(25); // Default 25 minutes
     
     const getBuildingLabel = (minutes) => {
-        if (minutes <= 20) return 'Cottage (short session)';
-        if (minutes <= 45) return 'Townhouse (medium session)';
-        if (minutes <= 90) return 'Mansion (long session)';
-        return 'Castle (marathon session)';
+        const tier = window.BuildingTiers.tierFor(minutes);
+        return `${tier.name} (${tier.label.toLowerCase()} build)`;
     };
 
     const formatTime = (seconds) => {
@@ -34,7 +32,8 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
                                 id="minutes-input"
                                 type="range"
                                 min="5"
-                                max="120"
+                                step="5"
+                                max="180"
                                 value={selectedMinutes}
                                 onChange={(e) => setSelectedMinutes(parseInt(e.target.value))}
                                 className="minutes-slider"

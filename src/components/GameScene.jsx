@@ -207,159 +207,54 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
     };
     
     const createConstructionWorker = (scene) => {
+        const F = window.BuildingFactory;
+        
+        // Main builder pushing a loaded wheelbarrow around the site
         const workerGroup = new THREE.Group();
-        
-        // Worker customization (can be linked to profile later)
-        const customization = {
-            skinColor: 0xFDBCB4,
-            overallColor: 0x4169E1,
-            hatColor: 0xFFD700,
-            hairColor: 0x8B4513,
-            gender: 'male'
-        };
-        
-        // Body (overalls)
-        const bodyGeometry = new THREE.BoxGeometry(0.8, 1.2, 0.4);
-        const bodyMaterial = new THREE.MeshLambertMaterial({ color: customization.overallColor });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.set(0, 0.6, 0);
-        body.castShadow = true;
-        workerGroup.add(body);
-        
-        // Head
-        const headGeometry = new THREE.SphereGeometry(0.3);
-        const headMaterial = new THREE.MeshLambertMaterial({ color: customization.skinColor });
-        const head = new THREE.Mesh(headGeometry, headMaterial);
-        head.position.set(0, 1.5, 0);
-        head.castShadow = true;
-        workerGroup.add(head);
-        
-        // Hard hat
-        const hatGeometry = new THREE.ConeGeometry(0.35, 0.2, 8);
-        const hatMaterial = new THREE.MeshLambertMaterial({ color: customization.hatColor });
-        const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-        hat.position.set(0, 1.7, 0);
-        hat.castShadow = true;
-        workerGroup.add(hat);
-        
-        // Hair
-        const hairGeometry = new THREE.SphereGeometry(0.25);
-        const hairMaterial = new THREE.MeshLambertMaterial({ color: customization.hairColor });
-        const hair = new THREE.Mesh(hairGeometry, hairMaterial);
-        hair.position.set(0, 1.6, 0);
-        hair.scale.set(1, 0.8, 1);
-        workerGroup.add(hair);
-        
-        // Arms
-        const armGeometry = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-        const armMaterial = new THREE.MeshLambertMaterial({ color: customization.skinColor });
-        
-        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        leftArm.position.set(-0.5, 0.6, 0);
-        leftArm.castShadow = true;
-        workerGroup.add(leftArm);
-        
-        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        rightArm.position.set(0.5, 0.6, 0);
-        rightArm.castShadow = true;
-        workerGroup.add(rightArm);
-        
-        // Legs
-        const legGeometry = new THREE.BoxGeometry(0.25, 0.8, 0.25);
-        const legMaterial = new THREE.MeshLambertMaterial({ color: customization.overallColor });
-        
-        const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-        leftLeg.position.set(-0.2, -0.4, 0);
-        leftLeg.castShadow = true;
-        workerGroup.add(leftLeg);
-        
-        const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-        rightLeg.position.set(0.2, -0.4, 0);
-        rightLeg.castShadow = true;
-        workerGroup.add(rightLeg);
-        
-        // Boots
-        const bootGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.4);
-        const bootMaterial = new THREE.MeshLambertMaterial({ color: 0x2F4F4F });
-        
-        const leftBoot = new THREE.Mesh(bootGeometry, bootMaterial);
-        leftBoot.position.set(-0.2, -0.9, 0);
-        leftBoot.castShadow = true;
-        workerGroup.add(leftBoot);
-        
-        const rightBoot = new THREE.Mesh(bootGeometry, bootMaterial);
-        rightBoot.position.set(0.2, -0.9, 0);
-        rightBoot.castShadow = true;
-        workerGroup.add(rightBoot);
-        
-        // Tool belt
-        const beltGeometry = new THREE.BoxGeometry(0.9, 0.15, 0.45);
-        const beltMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const belt = new THREE.Mesh(beltGeometry, beltMaterial);
-        belt.position.set(0, 0.1, 0);
-        workerGroup.add(belt);
-        
-        // Wheelbarrow
-        const wheelbarrowGroup = new THREE.Group();
-        
-        // Wheelbarrow body
-        const wheelbarrowBodyGeometry = new THREE.BoxGeometry(1.2, 0.4, 0.8);
-        const wheelbarrowBodyMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const wheelbarrowBody = new THREE.Mesh(wheelbarrowBodyGeometry, wheelbarrowBodyMaterial);
-        wheelbarrowBody.position.set(0, 0.2, 0);
-        wheelbarrowBody.castShadow = true;
-        wheelbarrowGroup.add(wheelbarrowBody);
-        
-        // Wheelbarrow handles
-        const handleGeometry = new THREE.CylinderGeometry(0.02, 0.02, 1.5);
-        const handleMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
-        
-        const leftHandle = new THREE.Mesh(handleGeometry, handleMaterial);
-        leftHandle.position.set(-0.4, 0.5, -0.6);
-        leftHandle.rotation.z = Math.PI / 6;
-        leftHandle.castShadow = true;
-        wheelbarrowGroup.add(leftHandle);
-        
-        const rightHandle = new THREE.Mesh(handleGeometry, handleMaterial);
-        rightHandle.position.set(0.4, 0.5, -0.6);
-        rightHandle.rotation.z = -Math.PI / 6;
-        rightHandle.castShadow = true;
-        wheelbarrowGroup.add(rightHandle);
-        
-        // Wheelbarrow wheel
-        const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1);
-        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x2F4F4F });
-        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheel.position.set(0, 0.3, 0.4);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.castShadow = true;
-        wheelbarrowGroup.add(wheel);
-        
-        // Position wheelbarrow behind worker
-        wheelbarrowGroup.position.set(0, 0, -1.5);
-        workerGroup.add(wheelbarrowGroup);
-        
-        // Position worker at construction site
+        const builder = F.createCharacter({ shirt: 0x2f6fbf, hair: 0x4a2f1b });
+        workerGroup.add(builder);
+        const barrow = F.createWheelbarrow();
+        barrow.position.set(0, 0, 0.95);
+        workerGroup.add(barrow);
+        builder.userData.parts.lArm.rotation.x = -0.9;
+        builder.userData.parts.rArm.rotation.x = -0.9;
         workerGroup.position.set(6, 0, 6);
         scene.add(workerGroup);
         scene.userData.workerGroup = workerGroup;
+        scene.userData.workerBuilder = builder;
         
-        // Store movement data
+        // Foreman and engineer standing around the site (idle animation)
+        const foreman = F.createCharacter({ shirt: 0xe8e8e8, pants: 0x5a4a3a, hat: 0xffffff, vest: 0xFF7A1A, skin: 0xC68642, hair: 0x1a1a1a });
+        foreman.position.set(-6.5, 0, 6.5);
+        foreman.rotation.y = Math.atan2(6.5, -6.5) + Math.PI;
+        foreman.userData.parts.rArm.rotation.x = -1.4;
+        scene.add(foreman);
+        const engineer = F.createCharacter({ female: true, shirt: 0x3a9d6e, pants: 0x2d2d3a, hat: 0xFFC21A, vest: 0xFFD21A, skin: 0xF1C27D, hair: 0x7a3b1d });
+        engineer.position.set(7, 0, -6.5);
+        engineer.rotation.y = Math.atan2(-7, 6.5) + Math.PI;
+        engineer.userData.parts.lArm.rotation.x = -1.0;
+        scene.add(engineer);
+        scene.userData.npcs = [foreman, engineer];
+        
+        F.createSiteProps(scene);
+        
+        // Movement path around the site
         scene.userData.workerMovement = {
             time: 0,
             path: [
-                { x: 6, z: 6 },   // Start position
-                { x: 8, z: 4 },   // Move to materials
-                { x: 4, z: 2 },   // Move to foundation
-                { x: 2, z: 6 },   // Move to walls
-                { x: 6, z: 8 },   // Move to towers
-                { x: 6, z: 6 }    // Return to start
+                { x: 6, z: 6 },
+                { x: 8, z: 3 },
+                { x: 7, z: -2 },
+                { x: 3, z: -7 },
+                { x: -5, z: -6 },
+                { x: -7, z: 0 },
+                { x: -4, z: 5 }
             ],
             currentTarget: 0,
             speed: 0.02
         };
         
-        console.log('Construction worker with wheelbarrow created');
+        console.log('Construction crew created');
     };
     
     // ─── Dynamic Building Creator ─────────────────────────────────────────
@@ -382,17 +277,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             });
         }
         
-        if (type === 'cottage' || type === 'treehouse') {
-            createMainCottage(buildingGroup);
-        } else if (type === 'townhouse' || type === 'lighthouse' || type === 'mansion') {
-            createMainTownhouse(buildingGroup);
-        } else {
-            // castle, skyscraper, or anything else falls back to castle
-            createMainCastle(buildingGroup);
-        }
-        
-        // Mansion = a wider, grander townhouse
-        if (type === 'mansion') buildingGroup.scale.set(1.35, 1, 1.35);
+        const tier = window.BuildingFactory.createBuilding(type, buildingGroup);
+        scene.userData.buildingView = tier.view;
         
         // All children start hidden (opacity 0)
         buildingGroup.traverse(child => {
@@ -439,319 +325,6 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         
         console.log(`${type} building created (all parts hidden, ready for phase building)`);
     };
-    
-    // ─── Main Cottage (center, phase-tagged) ───────────────────────────────
-    const createMainCottage = (group) => {
-        const s = 1.8; // Scale up for center building
-
-        // Phase 1: Foundation
-        const foundation = new THREE.Mesh(
-            new THREE.BoxGeometry(3.2*s, 0.3*s, 3.2*s),
-            new THREE.MeshLambertMaterial({ color: 0x696969 })
-        );
-        foundation.position.set(0, 0.15*s, 0);
-        foundation.userData.buildPhase = 1;
-        group.add(foundation);
-
-        // Phase 2: Walls
-        const walls = new THREE.Mesh(
-            new THREE.BoxGeometry(3*s, 2.2*s, 3*s),
-            new THREE.MeshLambertMaterial({ color: 0xE6B89C })
-        );
-        walls.position.set(0, 1.1*s + 0.3*s, 0);
-        walls.userData.buildPhase = 2;
-        group.add(walls);
-
-        // Phase 2: Door
-        const door = new THREE.Mesh(
-            new THREE.BoxGeometry(0.8*s, 1.6*s, 0.1*s),
-            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-        );
-        door.position.set(0, 0.8*s + 0.3*s, 1.55*s);
-        door.userData.buildPhase = 2;
-        group.add(door);
-
-        // Phase 3: Roof
-        const roof = new THREE.Mesh(
-            new THREE.ConeGeometry(2.3*s, 1.8*s, 8),
-            new THREE.MeshLambertMaterial({ color: 0x8B0000 })
-        );
-        roof.position.set(0, 2.9*s + 0.3*s, 0);
-        roof.rotation.y = Math.PI / 8;
-        roof.userData.buildPhase = 3;
-        group.add(roof);
-
-        // Phase 3: Chimney
-        const chimney = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5*s, 1.2*s, 0.5*s),
-            new THREE.MeshLambertMaterial({ color: 0x8B0000 })
-        );
-        chimney.position.set(1.3*s, 2.8*s, -0.9*s);
-        chimney.userData.buildPhase = 3;
-        group.add(chimney);
-
-        // Phase 4: Windows
-        const windowGeo = new THREE.BoxGeometry(0.7*s, 0.8*s, 0.1*s);
-        const windowMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
-        
-        const lw = new THREE.Mesh(windowGeo, windowMat);
-        lw.position.set(-0.9*s, 1.3*s + 0.3*s, 1.56*s);
-        lw.userData.buildPhase = 4;
-        group.add(lw);
-
-        const rw = new THREE.Mesh(windowGeo, windowMat);
-        rw.position.set(0.9*s, 1.3*s + 0.3*s, 1.56*s);
-        rw.userData.buildPhase = 4;
-        group.add(rw);
-
-        // Phase 4: Door handle
-        const handle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.06*s),
-            new THREE.MeshLambertMaterial({ color: 0xFFD700 })
-        );
-        handle.position.set(0.3*s, 0.8*s + 0.3*s, 1.61*s);
-        handle.userData.buildPhase = 4;
-        group.add(handle);
-
-        // Phase 4: Flower gardens
-        const flowerPositions = [[1.5,0,1.5],[-1.5,0,1.5],[1.5,0,-1.5],[-1.5,0,-1.5]];
-        const flowerColors = [0xFF6B9D, 0xFFB6C1, 0xFF69B4, 0xDA70D6];
-        flowerPositions.forEach((pos, i) => {
-            const flower = new THREE.Mesh(
-                new THREE.SphereGeometry(0.08*s),
-                new THREE.MeshLambertMaterial({ color: flowerColors[i] })
-            );
-            flower.position.set(pos[0]*s, 0.08*s, pos[2]*s);
-            flower.userData.buildPhase = 4;
-            group.add(flower);
-        });
-    };
-    
-    // ─── Main Townhouse (center, phase-tagged) ─────────────────────────────
-    const createMainTownhouse = (group) => {
-        const s = 1.5;
-
-        // Phase 1: Foundation
-        const foundation = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2*s, 0.4*s, 3.7*s),
-            new THREE.MeshLambertMaterial({ color: 0x696969 })
-        );
-        foundation.position.set(0, 0.2*s, 0);
-        foundation.userData.buildPhase = 1;
-        group.add(foundation);
-
-        // Phase 2: First floor
-        const floor1 = new THREE.Mesh(
-            new THREE.BoxGeometry(4*s, 2.8*s, 3.5*s),
-            new THREE.MeshLambertMaterial({ color: 0xD2B48C })
-        );
-        floor1.position.set(0, 1.4*s + 0.4*s, 0);
-        floor1.userData.buildPhase = 2;
-        group.add(floor1);
-
-        // Phase 2: Second floor
-        const floor2 = new THREE.Mesh(
-            new THREE.BoxGeometry(3.6*s, 2.8*s, 3.2*s),
-            new THREE.MeshLambertMaterial({ color: 0xDEB887 })
-        );
-        floor2.position.set(0, 4.2*s + 0.4*s, 0);
-        floor2.userData.buildPhase = 2;
-        group.add(floor2);
-
-        // Phase 2: Door
-        const door = new THREE.Mesh(
-            new THREE.BoxGeometry(0.9*s, 2.2*s, 0.1*s),
-            new THREE.MeshLambertMaterial({ color: 0x654321 })
-        );
-        door.position.set(0, 1.4*s + 0.4*s, 1.8*s);
-        door.userData.buildPhase = 2;
-        group.add(door);
-
-        // Phase 3: Roof
-        const roof = new THREE.Mesh(
-            new THREE.BoxGeometry(4.2*s, 0.4*s, 3.7*s),
-            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-        );
-        roof.position.set(0, 7.1*s + 0.4*s, 0);
-        roof.rotation.x = -Math.PI / 12;
-        roof.userData.buildPhase = 3;
-        group.add(roof);
-
-        // Phase 3: Attic
-        const attic = new THREE.Mesh(
-            new THREE.BoxGeometry(3.2*s, 1.5*s, 2.8*s),
-            new THREE.MeshLambertMaterial({ color: 0xF5DEB3 })
-        );
-        attic.position.set(0, 6.15*s + 0.4*s, 0);
-        attic.userData.buildPhase = 3;
-        group.add(attic);
-
-        // Phase 3: Chimney
-        const chimney = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4*s, 1.5*s, 0.4*s),
-            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-        );
-        chimney.position.set(1.6*s, 7.5*s + 0.4*s, -1.4*s);
-        chimney.userData.buildPhase = 3;
-        group.add(chimney);
-
-        // Phase 4: Balcony
-        const balcony = new THREE.Mesh(
-            new THREE.BoxGeometry(2.5*s, 0.15*s, 1.2*s),
-            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-        );
-        balcony.position.set(0, 2.8*s + 0.4*s, 1.6*s);
-        balcony.userData.buildPhase = 4;
-        group.add(balcony);
-
-        // Phase 4: Windows
-        const windowGeo = new THREE.BoxGeometry(0.8*s, 1.0*s, 0.1*s);
-        const windowMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
-        
-        [[-1.2,1.4],[1.2,1.4],[-1.0,4.2],[1.0,4.2]].forEach(([x,y]) => {
-            const w = new THREE.Mesh(windowGeo, windowMat);
-            w.position.set(x*s, y*s + 0.4*s, 1.81*s);
-            w.userData.buildPhase = 4;
-            group.add(w);
-        });
-
-        // Phase 4: Door handle
-        const handle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.06*s),
-            new THREE.MeshLambertMaterial({ color: 0xFFD700 })
-        );
-        handle.position.set(0.35*s, 1.4*s + 0.4*s, 1.86*s);
-        handle.userData.buildPhase = 4;
-        group.add(handle);
-
-        // Phase 4: Lamp post
-        const lampPost = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.05*s, 0.05*s, 1.2*s, 8),
-            new THREE.MeshLambertMaterial({ color: 0x696969 })
-        );
-        lampPost.position.set(2.8*s, 0.6*s, 1.5*s);
-        lampPost.userData.buildPhase = 4;
-        group.add(lampPost);
-
-        const lamp = new THREE.Mesh(
-            new THREE.SphereGeometry(0.15*s, 8, 6),
-            new THREE.MeshLambertMaterial({ color: 0xFFFF99, emissive: 0xFFFF99, emissiveIntensity: 0.3 })
-        );
-        lamp.position.set(2.8*s, 1.2*s, 1.5*s);
-        lamp.userData.buildPhase = 4;
-        group.add(lamp);
-    };
-    
-    // ─── Main Castle (center, phase-tagged) ────────────────────────────────
-    // Same geometry as the old createCastleEstate but with phase tags
-    const createMainCastle = (group) => {
-        // Phase 1: Foundation
-        const foundation = new THREE.Mesh(
-            new THREE.BoxGeometry(8, 1, 8),
-            new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
-        );
-        foundation.position.set(0, 0.5, 0);
-        foundation.receiveShadow = true;
-        foundation.userData.buildPhase = 1;
-        group.add(foundation);
-
-        // Phase 2: Outer walls
-        const wallMat = new THREE.MeshLambertMaterial({ color: 0x708090 });
-        const walls = [
-            { geo: [8, 2, 0.5], pos: [0, 2, 4] },
-            { geo: [8, 2, 0.5], pos: [0, 2, -4] },
-            { geo: [0.5, 2, 7], pos: [4, 2, 0] },
-            { geo: [0.5, 2, 7], pos: [-4, 2, 0] },
-        ];
-        walls.forEach(w => {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...w.geo), wallMat);
-            mesh.position.set(...w.pos);
-            mesh.castShadow = true;
-            mesh.userData.buildPhase = 2;
-            group.add(mesh);
-        });
-
-        // Phase 3: Corner towers
-        const towerPositions = [[3,0,3],[-3,0,3],[3,0,-3],[-3,0,-3]];
-        towerPositions.forEach(pos => {
-            const tower = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.8, 1.0, 4, 8),
-                new THREE.MeshLambertMaterial({ color: 0x708090 })
-            );
-            tower.position.set(pos[0], 3, pos[2]);
-            tower.castShadow = true;
-            tower.userData.buildPhase = 3;
-            group.add(tower);
-
-            const towerRoof = new THREE.Mesh(
-                new THREE.ConeGeometry(0.9, 1, 8),
-                new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
-            );
-            towerRoof.position.set(pos[0], 5.5, pos[2]);
-            towerRoof.userData.buildPhase = 3;
-            group.add(towerRoof);
-        });
-
-        // Phase 4: Central keep
-        const keep = new THREE.Mesh(
-            new THREE.BoxGeometry(4, 3, 4),
-            new THREE.MeshLambertMaterial({ color: 0x708090 })
-        );
-        keep.position.set(0, 2.5, 0);
-        keep.castShadow = true;
-        keep.userData.buildPhase = 4;
-        group.add(keep);
-
-        const keepRoof = new THREE.Mesh(
-            new THREE.ConeGeometry(3, 1.5, 8),
-            new THREE.MeshLambertMaterial({ color: 0x2F4F4F })
-        );
-        keepRoof.position.set(0, 5.25, 0);
-        keepRoof.userData.buildPhase = 4;
-        group.add(keepRoof);
-
-        // Phase 4: Gatehouse
-        const gatehouse = new THREE.Mesh(
-            new THREE.BoxGeometry(2, 2.5, 1),
-            new THREE.MeshLambertMaterial({ color: 0x708090 })
-        );
-        gatehouse.position.set(0, 2.25, 4.5);
-        gatehouse.userData.buildPhase = 4;
-        group.add(gatehouse);
-
-        // Phase 4: Entrance door
-        const entrance = new THREE.Mesh(
-            new THREE.BoxGeometry(1.5, 2, 0.1),
-            new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-        );
-        entrance.position.set(0, 1.5, 4.6);
-        entrance.userData.buildPhase = 4;
-        group.add(entrance);
-
-        // Phase 4: Windows
-        const winGeo = new THREE.BoxGeometry(0.6, 0.8, 0.1);
-        const winMat = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
-        for (let i = 0; i < 4; i++) {
-            const a = (i / 4) * Math.PI * 2;
-            const w = new THREE.Mesh(winGeo, winMat);
-            w.position.set(Math.cos(a)*2.1, 2.5, Math.sin(a)*2.1);
-            w.rotation.y = a;
-            w.userData.buildPhase = 4;
-            group.add(w);
-        }
-
-        // Phase 4: Flags
-        [[0,6,0],[3,5,3],[-3,5,3],[3,5,-3],[-3,5,-3]].forEach(pos => {
-            const flag = new THREE.Mesh(
-                new THREE.BoxGeometry(0.8, 0.5, 0.05),
-                new THREE.MeshLambertMaterial({ color: 0xFF0000 })
-            );
-            flag.position.set(...pos);
-            flag.userData.buildPhase = 4;
-            group.add(flag);
-        });
-    };
-    
     
     const addEnhancedDecorations = (scene) => {
         // Create elegant estate grounds
@@ -2660,49 +2233,59 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             checkBuildingState();
             
             // More sophisticated camera movement for castle
-            const radius = 20;
-            const height = 12;
+            const view = scene.userData.buildingView || { scale: 1, lookY: 4 };
+            // Pull the camera back a little on narrow (portrait) screens
+            const fit = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.8 : 1;
+            const radius = 20 * view.scale * fit;
+            const height = 12 * view.scale * fit;
             camera.position.x = Math.cos(time) * radius;
             camera.position.y = height + Math.sin(time * 0.5) * 2;
             camera.position.z = Math.sin(time) * radius;
             
             // Camera always looks at the castle center
-            camera.lookAt(0, 4, 0);
+            camera.lookAt(0, view.lookY, 0);
             
-            // Animate worker movement around the construction site
+            // Animate the crew around the construction site
             if (scene.userData.workerGroup && scene.userData.workerMovement) {
                 const worker = scene.userData.workerGroup;
                 const movement = scene.userData.workerMovement;
+                const parts = scene.userData.workerBuilder.userData.parts;
+                const path = movement.path;
                 
-                // Update movement time
-                movement.time += 0.01;
-                
-                // Get current target position
-                const currentTarget = movement.path[movement.currentTarget];
-                const nextTarget = movement.path[(movement.currentTarget + 1) % movement.path.length];
-                
-                // Calculate progress between current and next target
-                const progress = (movement.time * movement.speed) % 1;
-                
-                // Interpolate position
-                const currentX = currentTarget.x + (nextTarget.x - currentTarget.x) * progress;
-                const currentZ = currentTarget.z + (nextTarget.z - currentTarget.z) * progress;
-                
-                // Update worker position
-                worker.position.x = currentX;
-                worker.position.z = currentZ;
-                
-                // Rotate worker to face movement direction
-                const angle = Math.atan2(nextTarget.z - currentTarget.z, nextTarget.x - currentTarget.x);
-                worker.rotation.y = angle;
-                
-                // Add walking animation
-                worker.position.y = 0.1 + Math.sin(movement.time * 10) * 0.05;
-                
-                // Move to next target when reaching current one
-                if (progress > 0.95) {
-                    movement.currentTarget = (movement.currentTarget + 1) % movement.path.length;
+                // Walk toward the next waypoint at a steady speed
+                const target = path[movement.currentTarget];
+                const dx = target.x - worker.position.x;
+                const dz = target.z - worker.position.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < 0.15) {
+                    movement.currentTarget = (movement.currentTarget + 1) % path.length;
+                } else {
+                    const step = 0.045;
+                    worker.position.x += (dx / dist) * step;
+                    worker.position.z += (dz / dist) * step;
+                    // Turn smoothly to face the walking direction
+                    const want = Math.atan2(dx, dz);
+                    let diff = want - worker.rotation.y;
+                    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+                    worker.rotation.y += diff * 0.1;
                 }
+                movement.time += 0.16;
+                const swing = Math.sin(movement.time) * 0.55;
+                parts.lLeg.rotation.x = swing;
+                parts.rLeg.rotation.x = -swing;
+                parts.head.rotation.y = Math.sin(movement.time * 0.25) * 0.25;
+                worker.position.y = Math.abs(Math.sin(movement.time)) * 0.05;
+            }
+            
+            // Idle crew: foreman gestures, engineer reads the plans
+            if (scene.userData.npcs) {
+                const t = performance.now() / 1000;
+                const [foreman, engineer] = scene.userData.npcs;
+                foreman.userData.parts.rArm.rotation.x = -1.3 + Math.sin(t * 2.2) * 0.35;
+                foreman.userData.parts.head.rotation.y = Math.sin(t * 0.7) * 0.4;
+                foreman.position.y = Math.sin(t * 1.5) * 0.01;
+                engineer.userData.parts.head.rotation.x = 0.15 + Math.sin(t * 1.1) * 0.08;
+                engineer.userData.parts.lArm.rotation.x = -1.0 + Math.sin(t * 1.8) * 0.12;
             }
             
             // Build progressively based on buildStage

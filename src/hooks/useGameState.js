@@ -208,10 +208,7 @@ const useGameState = () => {
     // Longer study sessions build bigger buildings.
     const getHouseForDuration = (seconds) => {
         const minutes = seconds / 60;
-        if (minutes <= 20) return 'cottage';
-        if (minutes <= 45) return 'townhouse';
-        if (minutes <= 90) return 'mansion';
-        return 'castle';
+        return window.BuildingTiers ? window.BuildingTiers.tierFor(minutes).id : 'cottage';
     };
 
     const setHouseForDuration = (seconds) => {
