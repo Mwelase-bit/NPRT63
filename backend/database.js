@@ -7,7 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // DATABASE_URL is set automatically by Render's PostgreSQL addon (production)
 // or manually in backend/.env for local development.
 if (!process.env.DATABASE_URL) {
-  console.error('\n❌ ERROR: DATABASE_URL environment variable is not set!');
+  console.error('\n ERROR: DATABASE_URL environment variable is not set!');
   console.error('Please configure DATABASE_URL in your backend/.env (local) or in your hosting environment variables (Render).\n');
   process.exit(1);
 }
@@ -175,9 +175,9 @@ async function initDatabase() {
       ON CONFLICT (item_id) DO NOTHING;
     `);
 
-    console.log('✅ PostgreSQL database initialised successfully');
+    console.log('PostgreSQL database initialised successfully');
   } catch (err) {
-    console.error('❌ Database initialisation failed:', err.message);
+    console.error('Database initialisation failed:', err.message);
     throw err;
   } finally {
     client.release();

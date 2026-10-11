@@ -220,7 +220,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
 
                                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                 <div style={{ fontSize: '24px', background: 'rgba(255,255,255,0.1)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    {fac.emoji}
+                                                    <window.FeatherIcon name={fac.icon || 'users'} size={24} gap={0} />
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: 'bold', fontSize: '1.1em', color: fac.color }}>

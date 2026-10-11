@@ -11,7 +11,7 @@ const FACULTY_NAMES = {
     hum: 'Faculty of Humanities'
 };
 
-const FACULTY_EMOJIS  = { nas: '🔬', edu: '📚', ems: '📊', hum: '🎨' };
+const FACULTY_ICONS  = { nas: 'cpu', edu: 'book-open', ems: 'bar-chart-2', hum: 'feather' };
 const FACULTY_COLORS  = { nas: '#2196F3', edu: '#4CAF50', ems: '#FF9800', hum: '#9C27B0' };
 
 // ─── GET /api/leaderboard/faculty — Rankings within the user's faculty ─────────
@@ -40,7 +40,7 @@ router.get('/faculty', authenticate, async (req, res) => {
         res.json({
             faculty,
             facultyName:  FACULTY_NAMES[faculty]  || faculty,
-            facultyEmoji: FACULTY_EMOJIS[faculty]  || '🏫',
+            facultyIcon: FACULTY_ICONS[faculty]  || 'users',
             facultyColor: FACULTY_COLORS[faculty]  || '#888',
             leaderboard: result.rows.map((m, i) => ({
                 rank:              i + 1,
@@ -81,7 +81,7 @@ router.get('/interfaculty', authenticate, async (req, res) => {
                 rank:         i + 1,
                 faculty:      r.faculty,
                 facultyName:  FACULTY_NAMES[r.faculty]  || r.faculty,
-                facultyEmoji: FACULTY_EMOJIS[r.faculty]  || '🏫',
+                facultyIcon: FACULTY_ICONS[r.faculty]  || 'users',
                 facultyColor: FACULTY_COLORS[r.faculty]  || '#888',
                 totalHours:   parseFloat((parseInt(r.total_seconds, 10) / 3600).toFixed(1)),
                 studentCount: parseInt(r.student_count, 10),

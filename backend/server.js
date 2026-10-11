@@ -150,16 +150,16 @@ async function startServer() {
         await initDatabase();
         server.listen(PORT, () => {
             console.log('');
-            console.log('🏰 BUILDHAUS/CampusBuilder API & WS Server v2.1');
+            console.log('BUILDHAUS/CampusBuilder API & WS Server v2.1');
             console.log('─────────────────────────────────────');
-            console.log(`📡 HTTP & WS Running at:  http://localhost:${PORT}`);
-            console.log(`🔗 Health:      http://localhost:${PORT}/api/health`);
-            console.log(`👤 Auth:        http://localhost:${PORT}/api/auth`);
-            console.log(`⏱️  Sessions:    http://localhost:${PORT}/api/sessions`);
-            console.log(`🏆 Leaderboard: http://localhost:${PORT}/api/leaderboard`);
-            console.log(`🛒 Shop:        http://localhost:${PORT}/api/shop`);
-            console.log(`🎖️  Achievements: http://localhost:${PORT}/api/achievements`);
-            console.log(`🤖 AI Study:     http://localhost:${PORT}/api/ai/flashcards`);
+            console.log(`HTTP & WS Running at:  http://localhost:${PORT}`);
+            console.log(`Health:      http://localhost:${PORT}/api/health`);
+            console.log(`Auth:        http://localhost:${PORT}/api/auth`);
+            console.log(`⏱  Sessions:    http://localhost:${PORT}/api/sessions`);
+            console.log(`Leaderboard: http://localhost:${PORT}/api/leaderboard`);
+            console.log(`Shop:        http://localhost:${PORT}/api/shop`);
+            console.log(`Achievements: http://localhost:${PORT}/api/achievements`);
+            console.log(`AI Study:     http://localhost:${PORT}/api/ai/flashcards`);
             console.log('─────────────────────────────────────');
             console.log('');
         });

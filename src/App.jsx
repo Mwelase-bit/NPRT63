@@ -42,8 +42,8 @@ const App = () => {
 
     // All automated interruption detection has been removed.
     // The focus session ends only when:
-    //   1. The timer naturally completes ✅
-    //   2. The user clicks "Stop Session" ✅
+ // 1. The timer naturally completes
+ // 2. The user clicks "Stop Session"
 
     // Request notification permission after login/registration
     useEffect(() => {
@@ -95,11 +95,11 @@ const App = () => {
 
             if (gameState.buildStage !== nextStage) {
                 gameState.updateBuildStage(nextStage);
-                // 🔊 Sound: build stage advanced
+ // Sound: build stage advanced
                 if (window.SoundManager) window.SoundManager.buildStageUp();
             }
 
-            // 🔊 Tick sound for last 10 seconds
+ // Tick sound for last 10 seconds
             if (timer.timeLeft <= 10 && timer.timeLeft > 0) {
                 if (window.SoundManager) window.SoundManager.tick();
             }
@@ -123,12 +123,12 @@ const App = () => {
             rewards.awardCoins(timer.duration);
             rewards.updateStreak();
 
-            // 🔊 Sound: session complete + building done
+ // Sound: session complete + building done
             if (window.SoundManager) {
                 window.SoundManager.sessionComplete();
                 setTimeout(() => window.SoundManager.coinEarned(), 600);
             }
-            // 📱 Notification: session complete
+ // Notification: session complete
             if (window.NotificationManager) {
                 window.NotificationManager.sessionComplete(timer.duration);
             }
@@ -144,7 +144,7 @@ const App = () => {
                 .filter(a => a.unlocked && a.unlockedAt && (Date.now() - a.unlockedAt) < 10000)
                 .forEach(a => {
                     window.api.achievements.unlock(a.id).catch(() => { });
-                    // 🔊 + 📱 Achievement notification
+ // +  Achievement notification
                     if (window.SoundManager) window.SoundManager.achievementUnlocked();
                     if (window.NotificationManager) window.NotificationManager.achievementUnlocked(a.title || a.name);
                 });
@@ -157,9 +157,9 @@ const App = () => {
     // Handle interruption effects
     useEffect(() => {
         if (interruptionDetected) {
-            // 🔊 Sound: demolish
+ // Sound: demolish
             if (window.SoundManager) window.SoundManager.demolish();
-            // 📱 Notification: interrupted
+ // Notification: interrupted
             if (window.NotificationManager) window.NotificationManager.sessionInterrupted();
 
             // Sync interrupted session to backend
@@ -194,7 +194,7 @@ const App = () => {
         // Start building
         gameState.startBuilding();
 
-        // 🔊 Sound: session started
+ // Sound: session started
         if (window.SoundManager) window.SoundManager.sessionStart();
 
         setInterruptionDetected(false);

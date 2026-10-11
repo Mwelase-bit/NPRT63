@@ -40,7 +40,7 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // Programming or other unknown errors
-    console.error('ERROR 💥', err);
+    console.error('ERROR ', err);
     res.status(500).json({
         status: 'error',
         error: `System Error: ${err.message}`

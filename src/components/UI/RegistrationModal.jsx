@@ -197,7 +197,7 @@ const RegistrationModal = ({ gameState }) => {
                                         transition: 'all 0.2s ease'
                                     }}
                                 >
-                                    <div style={{ fontSize: '26px', marginBottom: '8px' }}>{faculty.emoji}</div>
+                                    <div style={{ fontSize: '26px', marginBottom: '8px' }}><window.FeatherIcon name={faculty.icon || 'users'} size={26} gap={0} /></div>
                                     <div style={{ fontSize: '0.8em', fontWeight: 600, lineHeight: 1.3 }}>
                                         {faculty.shortName}
                                     </div>

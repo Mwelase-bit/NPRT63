@@ -141,7 +141,7 @@ ${text.trim()}
         }
 
         res.status(201).json({
-            message: `Generated ${cleanCards.length} flashcards! +${COINS_PER_SET} coins earned. 🎴`,
+            message: `Generated ${cleanCards.length} flashcards! +${COINS_PER_SET} coins earned. `,
             setId:   newSetId,
             coinsEarned: COINS_PER_SET,
             cards:   cleanCards

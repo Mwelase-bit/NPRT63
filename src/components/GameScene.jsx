@@ -2178,7 +2178,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         if (!houseParts || scene.userData.isDestroying) return;
         
         scene.userData.isDestroying = true;
-        console.log('💥 BUILDING DESTRUCTION INITIATED! 💥');
+        console.log('BUILDING DESTRUCTION INITIATED! ');
         
         // Create dramatic explosion particles
         createExplosionParticles(scene);
@@ -2511,7 +2511,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
                 box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
                 animation: pulse 1s infinite;
             ">
-                💥 CASTLE DESTROYED! 💥<br>
+                BUILDING DESTROYED!<br>
                 <div style="font-size: 16px; margin-top: 10px; color: #fff;">
                     Returning to home page...
                 </div>
@@ -2540,7 +2540,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         const houseParts = scene.userData.houseParts;
         if (!houseParts) return;
         
-        console.log('🏗️ Rebuilding house...');
+        console.log('Rebuilding house...');
         
         // Reset all parts
         Object.values(houseParts).forEach(part => {
@@ -2566,7 +2566,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         scene.userData.phaseStartTime = Date.now();
         scene.userData.isDestroying = false;
         
-        console.log('🏠 House reset and ready for rebuilding!');
+        console.log('House reset and ready for rebuilding!');
     };
     
     // Swap the main building when the house type changes (set from session length)
@@ -2642,7 +2642,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             }
             
             event.preventDefault();
-            console.log('💥 TOUCH/CLICK DETECTED - DESTROYING BUILDING! 💥');
+            console.log('TOUCH/CLICK DETECTED - DESTROYING BUILDING! ');
             destroyHouse(scene);
         };
         

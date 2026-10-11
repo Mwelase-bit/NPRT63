@@ -24,10 +24,10 @@ let passed = 0, failed = 0;
 
 function assert(condition, label, extra = '') {
     if (condition) {
-        console.log(`  ✅ PASS: ${label}`);
+        console.log(`PASS: ${label}`);
         passed++;
     } else {
-        console.error(`  ❌ FAIL: ${label}${extra ? ' — ' + extra : ''}`);
+        console.error(`FAIL: ${label}${extra ? ' — ' + extra : ''}`);
         failed++;
     }
 }
@@ -35,7 +35,7 @@ function assert(condition, label, extra = '') {
 // ── Test suites ───────────────────────────────────────────────────────────────
 
 async function testHealth() {
-    console.log('\n🔍 Health Check');
+    console.log('\n Health Check');
     const { status, data } = await req('GET', '/health');
     assert(status === 200, 'GET /health returns 200');
     assert(data.status === 'ok', 'Health status is ok');
@@ -43,7 +43,7 @@ async function testHealth() {
 }
 
 async function testAuth() {
-    console.log('\n👤 Auth — Registration');
+    console.log('\n Auth — Registration');
     // Missing field
     let r = await req('POST', '/auth/register', { name: 'X', email: testEmail });
     assert(r.status === 400, 'Register missing fields → 400');
@@ -63,7 +63,7 @@ async function testAuth() {
     r = await req('POST', '/auth/register', { name: 'Dup', email: testEmail, password: 'pass123', faculty: 'edu' });
     assert(r.status === 409, 'Register duplicate email → 409');
 
-    console.log('\n👤 Auth — Login');
+    console.log('\n Auth — Login');
     r = await req('POST', '/auth/login', { email: testEmail, password: 'wrongpass' });
     assert(r.status === 401, 'Login wrong password → 401');
 
@@ -71,14 +71,14 @@ async function testAuth() {
     assert(r.status === 200, 'Login valid credentials → 200');
     assert(r.data.token, 'Login returns JWT token');
 
-    console.log('\n👤 Auth — Me');
+    console.log('\n Auth — Me');
     r = await req('GET', '/auth/me', null, testToken);
     assert(r.status === 200, 'GET /auth/me returns 200');
     assert(r.data.user?.email === testEmail, 'Me returns correct user');
 }
 
 async function testSessions() {
-    console.log('\n⏱️  Sessions');
+    console.log('\n⏱  Sessions');
 
     let r = await req('POST', '/sessions', { duration: 1500, elapsed: 1500, completed: true }, testToken);
     assert(r.status === 201, 'POST session completed → 201');
@@ -99,7 +99,7 @@ async function testSessions() {
 }
 
 async function testShop() {
-    console.log('\n🛒 Shop');
+    console.log('\n Shop');
 
     let r = await req('GET', '/shop', null, testToken);
     assert(r.status === 200, 'GET /shop returns 200');
@@ -126,7 +126,7 @@ async function testShop() {
 }
 
 async function testLeaderboards() {
-    console.log('\n🏆 Leaderboard');
+    console.log('\n Leaderboard');
 
     let r = await req('GET', '/leaderboard/faculty', null, testToken);
     assert(r.status === 200, 'GET /leaderboard/faculty returns 200');
@@ -143,7 +143,7 @@ async function testLeaderboards() {
 }
 
 async function testAchievements() {
-    console.log('\n🎖️  Achievements');
+    console.log('\n  Achievements');
 
     let r = await req('POST', '/achievements/unlock', { achievementId: 'first_session' }, testToken);
     assert(r.status === 201, 'POST /achievements/unlock → 201');
@@ -158,7 +158,7 @@ async function testAchievements() {
 }
 
 async function testUsers() {
-    console.log('\n🧑 Users');
+    console.log('\n Users');
 
     let r = await req('PUT', '/users/profile', { name: 'Updated Name', gender: 'male' }, testToken);
     assert(r.status === 200, 'PUT /users/profile returns 200');
@@ -172,7 +172,7 @@ async function testUsers() {
 }
 
 async function testSecurity() {
-    console.log('\n🔒 Security');
+    console.log('\n Security');
 
     // Protected routes without token
     const protectedRoutes = [
@@ -205,7 +205,7 @@ async function testSecurity() {
         await testUsers();
         await testSecurity();
     } catch (err) {
-        console.error('\n💥 Fatal test error:', err.message);
+        console.error('\n Fatal test error:', err.message);
         failed++;
     }
 

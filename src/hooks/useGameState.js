@@ -87,7 +87,7 @@ const useGameState = () => {
                         gender: user.gender || prev.builderCustomization.gender
                     }
                 }));
-                console.log('✅ Session restored for:', user.name);
+                console.log('Session restored for:', user.name);
             })
             .catch(err => {
                 if (err.status === 401 || err.status === 404) {
