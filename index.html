@@ -92,7 +92,7 @@
 
                     // Scene setup
                     const scene = new THREE.Scene();
-                    scene.fog = new THREE.Fog(0x87CEEB, 10, 50);
+                    scene.fog = new THREE.Fog(0x87CEEB, 35, 120);
 
                     const renderer = new THREE.WebGLRenderer({
                         antialias: true,
@@ -210,8 +210,9 @@
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ShopPanel.jsx?v=20261011e"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/AchievementPanel.jsx?v=20260617a"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20261011e"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/Buildings.js?v=20261011g"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20261011g"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/Buildings.js?v=20261011k"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/Environments.js?v=20261011k"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20261011k"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useFaculty.js?v=20261011e"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20261011e"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20261011e"></script>
@@ -220,7 +221,7 @@
         // Babel loads external files via async XHR — poll until all globals are ready, then mount.
         const REQUIRED = ['App','useGameState','useTimer','useRewards','useFaculty',
             'TimerPanel','RewardPanel','ProfilePanel','CommunityPanel','ShopPanel',
-            'AchievementPanel','StudyPanel','BuildingFactory','GameScene','RegistrationModal','ThreeCanvas',
+            'AchievementPanel','StudyPanel','BuildingFactory','EnvironmentFactory','GameScene','RegistrationModal','ThreeCanvas',
             'Storage','ACHIEVEMENTS','SPU_FACULTIES','api'];
 
         const mountApp = () => {

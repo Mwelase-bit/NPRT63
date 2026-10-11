@@ -7,14 +7,14 @@
 
     // ── Duration tiers: longer study session = bigger building ───────────
     const TIERS = [
-        { id: 'hut',        max: 10,       name: 'Log Cabin',    label: 'Tiny',   view: { scale: 0.75,  lookY: 2.0 } },
-        { id: 'cottage',    max: 20,       name: 'Cottage',      label: 'Small',  view: { scale: 0.9,  lookY: 2.5 } },
-        { id: 'townhouse',  max: 35,       name: 'Townhouse',    label: 'Medium', view: { scale: 1.05,  lookY: 4.0 } },
-        { id: 'villa',      max: 50,       name: 'Modern Villa', label: 'Medium', view: { scale: 1.15,  lookY: 3.0 } },
-        { id: 'mansion',    max: 70,       name: 'Mansion',      label: 'Large',  view: { scale: 1.35, lookY: 3.5 } },
-        { id: 'lighthouse', max: 90,       name: 'Lighthouse',   label: 'Large',  view: { scale: 1.25,  lookY: 5.5 } },
-        { id: 'castle',     max: 120,      name: 'Castle',       label: 'Grand',  view: { scale: 1.45, lookY: 4.5 } },
-        { id: 'skyscraper', max: Infinity, name: 'Skyscraper',   label: 'Epic',   view: { scale: 1.6, lookY: 6.5 } }
+        { id: 'hut',        max: 10,       name: 'Log Cabin',    label: 'Tiny',   view: { scale: 1.05,  lookY: 2.0 } },
+        { id: 'cottage',    max: 20,       name: 'Cottage',      label: 'Small',  view: { scale: 1.2,  lookY: 2.5 } },
+        { id: 'townhouse',  max: 35,       name: 'Townhouse',    label: 'Medium', view: { scale: 1.45,  lookY: 4.0, h: 1.25 } },
+        { id: 'villa',      max: 50,       name: 'Modern Villa', label: 'Medium', view: { scale: 1.55,  lookY: 3.0 } },
+        { id: 'mansion',    max: 70,       name: 'Mansion',      label: 'Large',  view: { scale: 1.75, lookY: 3.5 } },
+        { id: 'lighthouse', max: 90,       name: 'Lighthouse',   label: 'Large',  view: { scale: 1.6,  lookY: 5.5 } },
+        { id: 'castle',     max: 120,      name: 'Castle',       label: 'Grand',  view: { scale: 1.85, lookY: 4.5 } },
+        { id: 'skyscraper', max: Infinity, name: 'Skyscraper',   label: 'Epic',   view: { scale: 2.0, lookY: 6.5, h: 1.7 } }
     ];
     const tierFor = (minutes) => TIERS.find(t => minutes <= t.max) || TIERS[TIERS.length - 1];
     const getTier = (id) => TIERS.find(t => t.id === id) || TIERS[1];
@@ -572,6 +572,13 @@
             put(sh, new T.SphereGeometry(0.1, 10, 8), m(skin), 0, -0.72, 0);
             put(sh, new T.SphereGeometry(0.13, 10, 8), m(vest, 0.6), 0, -0.02, 0);
             parts[s < 0 ? 'lArm' : 'rArm'] = sh;
+            if (o.hammer && s > 0) {
+                const hm = new T.Group();
+                hm.position.set(0, -0.72, 0.05);
+                sh.add(hm);
+                put(hm, new T.CylinderGeometry(0.025, 0.025, 0.45, 6), m(0x6b4a2a), 0, 0, 0.1).rotation.x = Math.PI / 2;
+                put(hm, new T.BoxGeometry(0.12, 0.12, 0.2), m(0x666a70, 0.4), 0, 0, 0.32);
+            }
         });
         // neck + head
         put(grp, new T.CylinderGeometry(0.09, 0.1, 0.12, 8), m(skin), 0, 1.78, 0);
@@ -620,40 +627,43 @@
         return w;
     }
 
-    // Site props: cones, crates, pallet of bricks, cement mixer
-    function createSiteProps(scene) {
+    // Site props placed inside the fence: cones, crates, brick pallet, lumber, cement mixer
+    function createSiteProps(parent, hw, hd) {
+        hw = hw || 5; hd = hd || 5;
+        const X = hw + 3.0, Z = hd + 3.0;
         const grp = new T.Group();
         const m = (c, r, me) => new T.MeshStandardMaterial({ color: c, roughness: r === undefined ? 0.8 : r, metalness: me || 0.03 });
         const put = (geo, mt, x, y, z, ry) => { const mesh = new T.Mesh(geo, mt); mesh.position.set(x, y, z); if (ry) mesh.rotation.y = ry; mesh.castShadow = mesh.receiveShadow = true; grp.add(mesh); return mesh; };
-        // traffic cones
-        [[-8.6, 6.8], [-7.7, 8.0], [8.8, -6.2], [9.4, -4.9], [7.5, 8.8]].forEach(p => {
+        // traffic cones by the gate
+        [[-1.6, Z], [1.6, Z], [-X, Z - 1], [X, -Z + 1]].forEach(p => {
             put(new T.ConeGeometry(0.28, 0.7, 12), m(0xFF6A13, 0.6), p[0], 0.35, p[1]);
             put(new T.CylinderGeometry(0.34, 0.34, 0.06, 12), m(0x222222), p[0], 0.03, p[1]);
             put(new T.CylinderGeometry(0.17, 0.2, 0.1, 12), m(0xffffff, 0.4), p[0], 0.38, p[1]);
         });
-        // crates
-        [[-9, -5, 0.2], [-8.1, -5.4, -0.3], [-8.6, -4.9, 0.6]].forEach((p, i) => {
+        // crate stack
+        [[-X + 0.2, -Z + 1.2, 0.2], [-X + 1.1, -Z + 0.8, -0.3], [-X + 0.6, -Z + 1.1, 0.6]].forEach((p, i) => {
             put(new T.BoxGeometry(0.9, 0.9, 0.9), m(0xB07C45), p[0], 0.45 + (i === 2 ? 0.9 : 0), p[1], p[2]);
         });
         // brick pallet
-        put(new T.BoxGeometry(1.6, 0.14, 1.1), m(0x8a6a3a), 9, 0.07, 3);
-        put(new T.BoxGeometry(1.4, 0.8, 0.9), m(0xB5533C, 0.9), 9, 0.55, 3);
+        put(new T.BoxGeometry(1.6, 0.14, 1.1), m(0x8a6a3a), X - 0.6, 0.07, Z - 2.2);
+        put(new T.BoxGeometry(1.4, 0.8, 0.9), m(0xB5533C, 0.9), X - 0.6, 0.55, Z - 2.2);
         // lumber pile
-        for (let i = 0; i < 5; i++) put(new T.BoxGeometry(2.4, 0.14, 0.3), m(0xC9A36A), 4 + (i % 2) * 0.02, 0.1 + Math.floor(i / 3) * 0.16, -8.8 + (i % 3) * 0.34, 0);
+        for (let i = 0; i < 5; i++) put(new T.BoxGeometry(2.4, 0.14, 0.3), m(0xC9A36A), -X + 2.6, 0.1 + Math.floor(i / 3) * 0.16, Z - 0.9 - (i % 3) * 0.34);
         // cement mixer
         const mixer = new T.Group();
-        mixer.position.set(-9.3, 0, 1.2);
+        mixer.position.set(-X + 0.8, 0, 0.5);
         grp.add(mixer);
         const drum = new T.Mesh(new T.CylinderGeometry(0.5, 0.35, 0.9, 14), m(0xF2B01E, 0.5, 0.3));
         drum.position.y = 0.95; drum.rotation.z = 0.5; drum.castShadow = true; mixer.add(drum);
         [-0.35, 0.35].forEach(x => { const leg = new T.Mesh(new T.CylinderGeometry(0.05, 0.05, 0.8, 6), m(0x444444, 0.5, 0.5)); leg.position.set(x, 0.4, 0); mixer.add(leg); });
         [-0.45, 0.45].forEach(x => { const wh = new T.Mesh(new T.CylinderGeometry(0.2, 0.2, 0.08, 12), m(0x1c1c1c)); wh.position.set(x, 0.2, 0.2); wh.rotation.z = Math.PI / 2; mixer.add(wh); });
-        scene.add(grp);
-        scene.userData.siteProps = grp;
+        parent.add(grp);
+        return grp;
     }
 
     window.BuildingFactory = {
-        TIERS, tierFor, getTier, createBuilding, createCharacter, createWheelbarrow, createSiteProps
+        TIERS, tierFor, getTier, createBuilding, createCharacter, createWheelbarrow, createSiteProps,
+        helpers: { mat, add, box, cyl, wall, gable, windowAt, doorAt, pineTree, roundTree, palm, bush, lampPost, flowerBed, chimney, shade, makeTexture }
     };
     window.BuildingTiers = { TIERS, tierFor, getTier };
 })();

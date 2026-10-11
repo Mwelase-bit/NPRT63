@@ -1,6 +1,8 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) => {
     const sceneRef = useRef();
+    const timerRef = useRef(timer);
+    timerRef.current = timer;
     
     const setupScene = ({ scene, camera, renderer }) => {
         console.log('Setting up 3D scene...');
@@ -74,8 +76,11 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             ground.receiveShadow = true;
         scene.add(ground);
         
+            const legacy = [];
+            const trackLegacy = (fn) => { const n = scene.children.length; fn(); for (let i = n; i < scene.children.length; i++) legacy.push(scene.children[i]); };
+            
             // Create construction site
-            createConstructionSite(scene);
+            trackLegacy(() => createConstructionSite(scene));
             
             // Create the construction worker avatar
             createConstructionWorker(scene);
@@ -85,10 +90,13 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             scene.userData.houseType = gameState.currentHouse;
             
             // Add enhanced decorative elements
-            addEnhancedDecorations(scene);
+            trackLegacy(() => addEnhancedDecorations(scene));
             
             // Create village background with cottages, townhouses and castles
-            createVillageBackground(scene);
+            trackLegacy(() => createVillageBackground(scene));
+            // The new per-building surroundings replace the generic yard, fence and roads
+            const villageGroups = new Set(scene.userData.villageHouses || []);
+            legacy.forEach(o => { if (!villageGroups.has(o) && !o.isLight) o.visible = false; });
             
             console.log('3D scene setup complete');
         } catch (error) {
@@ -236,8 +244,6 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         scene.add(engineer);
         scene.userData.npcs = [foreman, engineer];
         
-        F.createSiteProps(scene);
-        
         // Movement path around the site
         scene.userData.workerMovement = {
             time: 0,
@@ -322,6 +328,58 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
                 }
             }
         });
+        
+        // Reveal order inside each phase: bottom to top, so the building rises while the timer runs
+        buildingGroup.updateMatrixWorld(true);
+        const bands = { 1: [0, 0.08], 2: [0.08, 0.55], 3: [0.55, 0.8], 4: [0.8, 1] };
+        const structure = new THREE.Box3();
+        Object.keys(scene.userData.houseParts.phaseGroups).forEach(ph => {
+            const list = scene.userData.houseParts.phaseGroups[ph];
+            const worldY = m => m.matrixWorld.elements[13];
+            list.sort((a, b) => worldY(a) - worldY(b));
+            list.forEach((m, i) => {
+                m.userData.revealAt = bands[ph][0] + (i / Math.max(1, list.length)) * (bands[ph][1] - bands[ph][0]);
+                m.userData.baseScale = m.scale.clone();
+                m.userData.shownAt = null;
+                if (ph === '2' || ph === '3') structure.expandByObject(m);
+            });
+        });
+        if (structure.isEmpty()) structure.set(new THREE.Vector3(-3, 0, -3), new THREE.Vector3(3, 6, 3));
+        
+        // Surroundings and construction site for this building type
+        ['environment', 'site'].forEach(k => {
+            const old = scene.userData[k];
+            if (old) {
+                scene.remove(old.group);
+                old.group.traverse(c => { if (c.geometry) c.geometry.dispose(); });
+            }
+        });
+        const EF = window.EnvironmentFactory;
+        const env = EF.createEnvironment(type);
+        const site = EF.createSite(type, structure);
+        scene.add(env.group);
+        scene.add(site.group);
+        scene.userData.environment = env;
+        scene.userData.site = site;
+        
+        // Crew positions and walking route follow the building footprint
+        const { hw, hd } = site.size;
+        if (scene.userData.workerMovement) {
+            const wx = hw + 2.2, wz = hd + 2.2;
+            scene.userData.workerMovement.path = [
+                { x: wx, z: wz }, { x: 0, z: wz + 0.4 }, { x: -wx, z: wz }, { x: -wx, z: 0 },
+                { x: -wx, z: -wz }, { x: 0, z: -wz - 0.4 }, { x: wx, z: -wz }, { x: wx, z: 0 }
+            ];
+            scene.userData.workerMovement.currentTarget = 0;
+            scene.userData.workerGroup.position.set(wx, 0, wz);
+        }
+        if (scene.userData.npcs) {
+            const [foreman, engineer] = scene.userData.npcs;
+            foreman.position.set(-(hw + 3.2), 0, hd + 3.2);
+            foreman.rotation.y = Math.atan2(hw + 3.2, -(hd + 3.2));
+            engineer.position.set(hw + 3.2, 0, -(hd + 2.4));
+            engineer.rotation.y = Math.atan2(-(hw + 3.2), hd + 2.4);
+        }
         
         console.log(`${type} building created (all parts hidden, ready for phase building)`);
     };
@@ -2237,7 +2295,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             // Pull the camera back a little on narrow (portrait) screens
             const fit = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.8 : 1;
             const radius = 20 * view.scale * fit;
-            const height = 12 * view.scale * fit;
+            const height = 12 * view.scale * fit * (view.h || 1);
             camera.position.x = Math.cos(time) * radius;
             camera.position.y = height + Math.sin(time * 0.5) * 2;
             camera.position.z = Math.sin(time) * radius;
@@ -2312,6 +2370,37 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
                         lastBuildStage = 0;
                     }
                 }
+            }
+            
+            // Surroundings + construction site, and the timer-driven building reveal
+            {
+                const nowT = performance.now() / 1000;
+                const tm = timerRef.current || {};
+                const active = !!(tm.isActive && tm.duration > 0);
+                const progress = active ? Math.min(1, Math.max(0, 1 - tm.timeLeft / tm.duration)) : 0;
+                const parts = scene.userData.houseParts;
+                const completed = !active && !gameState.isBuilding && gameState.buildStage >= 4;
+                if (parts && parts.phaseGroups) {
+                    Object.values(parts.phaseGroups).forEach(list => list.forEach(m => {
+                        if (!m.material) return;
+                        const u = m.userData;
+                        if (completed) { m.material.opacity = 1; m.scale.copy(u.baseScale); u.shownAt = 1; return; }
+                        const visible = active && progress >= u.revealAt;
+                        if (visible) {
+                            if (u.shownAt === null) u.shownAt = nowT;
+                            const k = Math.min(1, (nowT - u.shownAt) / 0.6);
+                            m.material.opacity = k;
+                            const pop = 0.8 + 0.2 * k;
+                            m.scale.set(u.baseScale.x * pop, u.baseScale.y * pop, u.baseScale.z * pop);
+                        } else {
+                            u.shownAt = null;
+                            m.material.opacity = 0;
+                            m.scale.copy(u.baseScale);
+                        }
+                    }));
+                }
+                if (scene.userData.environment) scene.userData.environment.update(nowT);
+                if (scene.userData.site) scene.userData.site.update({ progress, active, complete: completed, t: nowT });
             }
             
             // Ensure we're rendering
