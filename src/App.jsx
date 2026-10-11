@@ -184,7 +184,8 @@ const App = () => {
         // Record when session started (for elapsed-time tracking)
         sessionStartRef.current = Date.now();
 
-        // Reset building state first
+        // Pick the building size from the session length, then reset
+        gameState.setHouseForDuration(duration);
         gameState.resetBuilding();
 
         // Start timer
@@ -353,7 +354,8 @@ const App = () => {
                                 setMobileMenuOpen(false);
                             }}
                         >
-                            🧠 Study AI
+                            <i data-feather="book-open"></i>
+                            Study
                         </button>
                     </div>
 

@@ -14,8 +14,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
             directionalLight.position.set(15, 20, 10);
         directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
             directionalLight.shadow.camera.near = 0.5;
             directionalLight.shadow.camera.far = 50;
             directionalLight.shadow.camera.left = -20;
@@ -82,6 +82,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             
             // Create the main building based on current house type
             createCurrentBuilding(scene, gameState.currentHouse);
+            scene.userData.houseType = gameState.currentHouse;
             
             // Add enhanced decorative elements
             addEnhancedDecorations(scene);
@@ -371,6 +372,16 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         
         console.log(`Creating main building: ${type}`);
         
+        // Remove any previous building (house type changes with session length)
+        const oldGroup = scene.userData.houseGroup;
+        if (oldGroup) {
+            scene.remove(oldGroup);
+            oldGroup.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+        }
+        
         if (type === 'cottage' || type === 'treehouse') {
             createMainCottage(buildingGroup);
         } else if (type === 'townhouse' || type === 'lighthouse' || type === 'mansion') {
@@ -379,6 +390,9 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             // castle, skyscraper, or anything else falls back to castle
             createMainCastle(buildingGroup);
         }
+        
+        // Mansion = a grander, scaled-up townhouse
+        if (type === 'mansion') buildingGroup.scale.setScalar(1.4);
         
         // All children start hidden (opacity 0)
         buildingGroup.traverse(child => {
@@ -1132,8 +1146,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         villageDirectionalLight.position.set(50, 50, 50);
         villageDirectionalLight.target.position.set(0, 0, 0);
         villageDirectionalLight.castShadow = true;
-        villageDirectionalLight.shadow.mapSize.width = 2048;
-        villageDirectionalLight.shadow.mapSize.height = 2048;
+        villageDirectionalLight.shadow.mapSize.width = 1024;
+        villageDirectionalLight.shadow.mapSize.height = 1024;
         villageDirectionalLight.shadow.camera.near = 0.5;
         villageDirectionalLight.shadow.camera.far = 200;
         villageDirectionalLight.shadow.camera.left = -100;
@@ -2555,6 +2569,15 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
         console.log('🏠 House reset and ready for rebuilding!');
     };
     
+    // Swap the main building when the house type changes (set from session length)
+    useEffect(() => {
+        if (!sceneRef.current) return;
+        const { scene } = sceneRef.current;
+        if (scene.userData.houseType === gameState.currentHouse) return;
+        createCurrentBuilding(scene, gameState.currentHouse);
+        scene.userData.houseType = gameState.currentHouse;
+    }, [gameState.currentHouse]);
+
     // Enhanced animation loop with building phases
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -2723,7 +2746,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0 }) 
             document.removeEventListener('touchstart', handleDestruction);
             document.removeEventListener('click', handleDestruction);
         };
-    }, [gameState.isBuilding, gameState.buildStage]);
+    }, [gameState.isBuilding, gameState.buildStage, gameState.currentHouse]);
 
     // Reactively update village visibility when housesBuilt changes
     useEffect(() => {

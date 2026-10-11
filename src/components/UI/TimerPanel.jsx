@@ -2,6 +2,13 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const TimerPanel = ({ timer, onStartSession, gameState }) => {
     const [selectedMinutes, setSelectedMinutes] = useState(25); // Default 25 minutes
     
+    const getBuildingLabel = (minutes) => {
+        if (minutes <= 20) return 'Cottage (short session)';
+        if (minutes <= 45) return 'Townhouse (medium session)';
+        if (minutes <= 90) return 'Mansion (long session)';
+        return 'Castle (marathon session)';
+    };
+
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -44,7 +51,7 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
                         <div className="build-stages">
                             <div className="stage">
                                 <i data-feather="home"></i>
-                                Ready to build: {gameState.currentHouse}
+                                Ready to build: {getBuildingLabel(selectedMinutes)}
                             </div>
                         </div>
                     </div>

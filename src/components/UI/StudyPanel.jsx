@@ -2,6 +2,19 @@
 // Runs ALONGSIDE the focus timer — never interrupts it.
 const { useState, useEffect, useCallback, useRef } = React;
 
+// Feather icon rendered as inline SVG (stable across React re-renders)
+const StudyIcon = ({ name, size = 16 }) => {
+    const icon = window.feather && window.feather.icons[name];
+    if (!icon) return null;
+    return (
+        <span
+            className="study-inline-icon"
+            style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}
+            dangerouslySetInnerHTML={{ __html: icon.toSvg({ width: size, height: size, 'stroke-width': 2 }) }}
+        />
+    );
+};
+
 const StudyPanel = ({ currentUser, apiBase = '' }) => {
     // ── View state ────────────────────────────────────────────────────────────
     const [view, setView] = useState('library'); // 'library' | 'generate' | 'study' | 'quiz' | 'quiz-results'
@@ -288,13 +301,13 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     className={`study-tab ${view === 'generate' ? 'active' : ''}`}
                     onClick={() => setView('generate')}
                 >
-                    ✨ Generate
+                    <StudyIcon name="edit-3" /> Generate
                 </button>
                 {view === 'study' && (
                     <button className="study-tab active">Study</button>
                 )}
                 {(view === 'quiz' || view === 'quiz-results') && (
-                    <button className="study-tab active">🧠 Quiz</button>
+                    <button className="study-tab active"><StudyIcon name="help-circle" /> Quiz</button>
                 )}
             </div>
 
@@ -312,7 +325,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             <h3>No flashcard sets yet</h3>
                             <p>Paste your lecture notes and let AI do the hard work!</p>
                             <button className="btn-study-primary" onClick={() => setView('generate')}>
-                                ✨ Generate My First Set
+                                <StudyIcon name="edit-3" /> Generate My First Set
                             </button>
                         </div>
                     ) : (
@@ -341,7 +354,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                                     title="Take a quiz on this set"
                                                     disabled={quizGenerating}
                                                 >
-                                                    {quizGenerating && quizSetId === s.id ? '...' : '🧠 Quiz'}
+                                                    {quizGenerating && quizSetId === s.id ? '...' : <><StudyIcon name="help-circle" size={13} /> Quiz</>}
                                                 </button>
                                                 <button
                                                     className="study-set-delete"
@@ -419,7 +432,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     </div>
 
                     {genError && (
-                        <div className="study-error">⚠️ {genError}</div>
+                        <div className="study-error"><StudyIcon name="alert-triangle" /> {genError}</div>
                     )}
 
                     <button
@@ -433,7 +446,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                 AI is thinking…
                             </>
                         ) : (
-                            <>✨ Generate Flashcards (+10 coins)</>
+                            <><StudyIcon name="edit-3" /> Generate Flashcards (+10 coins)</>
                         )}
                     </button>
                     <p className="study-hint">Your focus timer keeps running while AI generates your cards.</p>
@@ -611,7 +624,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         {/* Next / Finish */}
                         {answered && (
                             <button className="btn-study-primary btn-full quiz-next-btn" onClick={handleNextQuestion}>
-                                {quizIndex < total - 1 ? 'Next Question →' : '🏁 See Results'}
+                                {quizIndex < total - 1 ? 'Next Question →' : <><StudyIcon name="flag" /> See Results</>}
                             </button>
                         )}
                     </div>
@@ -648,25 +661,25 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         </div>
 
                         <div className="quiz-result-msg">
-                            {quizResult?.percentage === 100 && '🏆 Perfect Score! Incredible!'}
-                            {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && '🌟 Great work! Almost perfect!'}
-                            {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && '👍 Good job! Keep practising!'}
+                            {quizResult?.percentage === 100 && <><StudyIcon name="award" /> Perfect Score! Incredible!</>}
+                            {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && <><StudyIcon name="star" /> Great work! Almost perfect!</>}
+                            {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && <><StudyIcon name="thumbs-up" /> Good job! Keep practising!</>}
                             {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && '📚 Keep studying — you\'ll get there!'}
                             {quizResult?.percentage < 40 && '💪 Don\'t give up! Review your flashcards.'}
                         </div>
 
                         {quizResult?.coinsEarned > 0 && (
                             <div className="quiz-coins-badge">
-                                🪙 +{quizResult.coinsEarned} coins earned!
+                                <StudyIcon name="dollar-sign" /> +{quizResult.coinsEarned} coins earned!
                             </div>
                         )}
 
                         <div className="quiz-results-actions">
                             <button className="btn-study-primary" onClick={retryQuiz} disabled={quizGenerating}>
-                                {quizGenerating ? '⏳ Generating…' : '🔄 Try Again'}
+                                {quizGenerating ? <><StudyIcon name="loader" /> Generating…</> : <><StudyIcon name="rotate-ccw" /> Try Again</>}
                             </button>
                             <button className="study-nav-btn" onClick={() => setView('study')}>
-                                📖 Review Cards
+                                <StudyIcon name="book-open" /> Review Cards
                             </button>
                             <button className="study-nav-btn" onClick={() => setView('library')}>
                                 ← Library

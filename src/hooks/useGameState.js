@@ -156,7 +156,7 @@ const useGameState = () => {
                 buildStage: 4,
                 isBuilding: false,
                 completedHouses: [...prev.completedHouses, newCompletedHouse],
-                currentHouse: getNextHouseType(prev.completedHouses.length + 1)
+                currentHouse: prev.currentHouse
             };
         });
     };
@@ -203,6 +203,21 @@ const useGameState = () => {
                 houses: [...prev.purchasedItems.houses, houseType]
             }
         }));
+    };
+
+    // Longer study sessions build bigger buildings.
+    const getHouseForDuration = (seconds) => {
+        const minutes = seconds / 60;
+        if (minutes <= 20) return 'cottage';
+        if (minutes <= 45) return 'townhouse';
+        if (minutes <= 90) return 'mansion';
+        return 'castle';
+    };
+
+    const setHouseForDuration = (seconds) => {
+        const houseType = getHouseForDuration(seconds);
+        setGameState(prev => ({ ...prev, currentHouse: houseType }));
+        return houseType;
     };
 
     const getNextHouseType = (houseCount) => {
@@ -295,6 +310,7 @@ const useGameState = () => {
         startBuilding,
         updateBuildStage,
         completeBuilding,
+        setHouseForDuration,
         triggerDemolition,
         resetBuilding,
         updateBuilderCustomization,
