@@ -223,7 +223,7 @@ const App = () => {
                     zIndex: 99999, color: 'white',
                     fontFamily: "'Inter', sans-serif"
                 }}>
-                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🏰</div>
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}><window.FeatherIcon name="home" size={56} gap={0} /></div>
                     <h2 style={{ margin: '0 0 10px', fontWeight: 700 }}>BUILDHAUS</h2>
                     <p style={{ opacity: 0.6, margin: '0 0 30px' }}>Restoring your session...</p>
                     <div style={{
@@ -237,7 +237,7 @@ const App = () => {
                 </div>
             )}
 
-            {/* ⚠️ Backend offline warning banner */}
+            {/* Backend offline warning banner */}
             {!gameState.authRestoring && gameState.backendOffline && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0,
@@ -247,7 +247,7 @@ const App = () => {
                     fontFamily: "'Inter', sans-serif", fontSize: '0.9em',
                     boxShadow: '0 2px 12px rgba(0,0,0,0.4)'
                 }}>
-                    ⚠️ <strong>Server offline</strong> — Start the backend server to save progress &amp; see community data.
+                    <window.FeatherIcon name="alert-triangle" /> <strong>Server offline</strong> — Start the backend server to save progress &amp; see community data.
                     &nbsp;<button
                         onClick={() => window.location.reload()}
                         style={{
@@ -273,7 +273,7 @@ const App = () => {
                         alignItems: 'center', justifyContent: 'center',
                         background: '#1a1a2e', color: 'white'
                     }}>
-                        <h3>🌀 3D Engine Unavailable</h3>
+                        <h3><window.FeatherIcon name="alert-circle" />3D Engine Unavailable</h3>
                         <p style={{ opacity: 0.6 }}>The graphics engine encountered a problem.</p>
                     </div>
                 }>

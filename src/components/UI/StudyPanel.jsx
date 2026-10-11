@@ -360,7 +360,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                                     className="study-set-delete"
                                                     onClick={(e) => deleteSet(s.id, e)}
                                                     title="Delete set"
-                                                >✕</button>
+                                                ><StudyIcon name="x" size={14} /></button>
                                             </div>
                                         </div>
                                     </div>
@@ -606,8 +606,8 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                     >
                                         <span className="quiz-option-letter">{['A','B','C','D'][i]}</span>
                                         <span className="quiz-option-text">{opt}</span>
-                                        {answered && i === correct && <span className="quiz-tick">✓</span>}
-                                        {answered && i === chosen && i !== correct && <span className="quiz-cross">✗</span>}
+                                        {answered && i === correct && <span className="quiz-tick"><StudyIcon name="check" size={14} /></span>}
+                                        {answered && i === chosen && i !== correct && <span className="quiz-cross"><StudyIcon name="x" size={14} /></span>}
                                     </button>
                                 );
                             })}
@@ -616,7 +616,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         {/* Explanation */}
                         {showExplanation && (
                             <div className={`quiz-explanation ${answeredMap[quizIndex] === q.answer ? 'quiz-exp-correct' : 'quiz-exp-wrong'}`}>
-                                <strong>{answeredMap[quizIndex] === q.answer ? '✓ Correct!' : '✗ Incorrect'}</strong>
+                                <strong>{answeredMap[quizIndex] === q.answer ? <><StudyIcon name="check-circle" /> Correct!</> : <><StudyIcon name="x-circle" /> Incorrect</>}</strong>
                                 {' — '}{q.explanation}
                             </div>
                         )}
@@ -664,8 +664,8 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             {quizResult?.percentage === 100 && <><StudyIcon name="award" /> Perfect Score! Incredible!</>}
                             {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && <><StudyIcon name="star" /> Great work! Almost perfect!</>}
                             {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && <><StudyIcon name="thumbs-up" /> Good job! Keep practising!</>}
-                            {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && '📚 Keep studying — you\'ll get there!'}
-                            {quizResult?.percentage < 40 && '💪 Don\'t give up! Review your flashcards.'}
+                            {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && <><StudyIcon name="book" /> Keep studying — you'll get there!</>}
+                            {quizResult?.percentage < 40 && <><StudyIcon name="refresh-cw" /> Don't give up! Review your flashcards.</>}
                         </div>
 
                         {quizResult?.coinsEarned > 0 && (

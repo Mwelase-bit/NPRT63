@@ -10,6 +10,19 @@
     <script src="vendor/three.min.js"></script>
     <script src="vendor/babel.min.js"></script>
     <script src="vendor/feather.min.js"></script>
+    <script>
+        // Inline feather icon as a React component (survives re-renders)
+        window.FeatherIcon = function (props) {
+            var icon = window.feather && window.feather.icons[props.name];
+            if (!icon) return null;
+            var size = props.size || 16;
+            return window.React.createElement('span', {
+                className: 'feather-inline',
+                style: Object.assign({ display: 'inline-flex', verticalAlign: 'middle', marginRight: props.gap === undefined ? 6 : props.gap, color: props.color }, props.style),
+                dangerouslySetInnerHTML: { __html: icon.toSvg({ width: size, height: size, 'stroke-width': 2 }) }
+            });
+        };
+    </script>
     <link href="vendor/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="src/styles/App.css?v=20260619a">
 </head>
@@ -193,14 +206,14 @@
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/TimerPanel.jsx?v=20261011a"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RewardPanel.jsx?v=20260617a"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ProfilePanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/CommunityPanel.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/CommunityPanel.jsx?v=20261011b"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ShopPanel.jsx?v=20260617a"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/AchievementPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20261011a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20261011b"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20261011a"></script>
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useFaculty.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20261011a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20261011b"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20261011b"></script>
 
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap">
         // Babel loads external files via async XHR — poll until all globals are ready, then mount.

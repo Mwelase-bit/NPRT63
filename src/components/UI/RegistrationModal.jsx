@@ -111,7 +111,7 @@ const RegistrationModal = ({ gameState }) => {
             }}>
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>🏰</div>
+                    <div style={{ fontSize: '48px', marginBottom: '10px' }}><window.FeatherIcon name="home" size={44} gap={0} /></div>
                     <h2 style={{ margin: 0, fontSize: '1.8em', fontWeight: 700, letterSpacing: '-0.5px' }}>
                         Welcome to BUILDHAUS
                     </h2>
@@ -407,7 +407,7 @@ const RegistrationModal = ({ gameState }) => {
                                     opacity: isSubmitting ? 0.8 : 1
                                 }}
                             >
-                                {isSubmitting ? 'Registering...' : '🏰 Start Building'}
+                                {isSubmitting ? 'Registering...' : <><window.FeatherIcon name="home" /> Start Building</>}
                             </button>
                         </div>
                     </div>
@@ -470,7 +470,7 @@ const RegistrationModal = ({ gameState }) => {
                                 opacity: isSubmitting ? 0.8 : 1
                             }}
                         >
-                            {isSubmitting ? 'Logging in...' : '🔑 Log In'}
+                            {isSubmitting ? 'Logging in...' : <><window.FeatherIcon name="log-in" /> Log In</>}
                         </button>
                     </div>
                 )}
