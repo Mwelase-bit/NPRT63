@@ -2,6 +2,11 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const TimerPanel = ({ timer, onStartSession, gameState }) => {
     const [selectedMinutes, setSelectedMinutes] = useState(25); // Default 25 minutes
     
+    const getBuildingLabel = (minutes) => {
+        const tier = window.BuildingTiers.tierFor(minutes);
+        return `${tier.name} (${tier.label.toLowerCase()} build)`;
+    };
+
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -27,7 +32,8 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
                                 id="minutes-input"
                                 type="range"
                                 min="5"
-                                max="120"
+                                step="5"
+                                max="180"
                                 value={selectedMinutes}
                                 onChange={(e) => setSelectedMinutes(parseInt(e.target.value, 10))}
                                 className="app-slider minutes-slider"
@@ -46,7 +52,7 @@ const TimerPanel = ({ timer, onStartSession, gameState }) => {
                         <div className="build-stages">
                             <div className="stage">
                                 <i data-feather="home"></i>
-                                Ready to build: {gameState.currentHouse}
+                                Ready to build: {getBuildingLabel(selectedMinutes)}
                             </div>
                         </div>
                     </div>

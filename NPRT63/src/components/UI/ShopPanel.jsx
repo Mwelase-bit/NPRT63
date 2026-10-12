@@ -123,7 +123,7 @@ const ShopPanel = ({ gameState, rewards }) => {
                     >
                         <div className="item-header">
                             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.2em' }}>{item.emoji}</span>
+                                <window.FeatherIcon name={({ outfit: 'user', hat: 'shield', tool: 'tool', house: 'home', booster: 'zap' })[item.category] || 'gift'} size={20} />
                                 {item.name}
                             </h3>
                             {item.owned && (

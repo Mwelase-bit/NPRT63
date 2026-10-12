@@ -46,8 +46,8 @@ const App = () => {
 
     // All automated interruption detection has been removed.
     // The focus session ends only when:
-    //   1. The timer naturally completes ✅
-    //   2. The user clicks "Stop Session" ✅
+ // 1. The timer naturally completes
+ // 2. The user clicks "Stop Session"
 
     // Request notification permission after login/registration
     useEffect(() => {
@@ -99,11 +99,11 @@ const App = () => {
 
             if (gameState.buildStage !== nextStage) {
                 gameState.updateBuildStage(nextStage);
-                // 🔊 Sound: build stage advanced
+ // Sound: build stage advanced
                 if (window.SoundManager) window.SoundManager.buildStageUp();
             }
 
-            // 🔊 Tick sound for last 10 seconds
+ // Tick sound for last 10 seconds
             if (timer.timeLeft <= 10 && timer.timeLeft > 0) {
                 if (window.SoundManager) window.SoundManager.tick();
             }
@@ -127,12 +127,12 @@ const App = () => {
             rewards.awardCoins(timer.duration);
             rewards.updateStreak();
 
-            // 🔊 Sound: session complete + building done
+ // Sound: session complete + building done
             if (window.SoundManager) {
                 window.SoundManager.sessionComplete();
                 setTimeout(() => window.SoundManager.coinEarned(), 600);
             }
-            // 📱 Notification: session complete
+ // Notification: session complete
             if (window.NotificationManager) {
                 window.NotificationManager.sessionComplete(timer.duration);
             }
@@ -148,7 +148,7 @@ const App = () => {
                 .filter(a => a.unlocked && a.unlockedAt && (Date.now() - a.unlockedAt) < 10000)
                 .forEach(a => {
                     window.api.achievements.unlock(a.id).catch(() => { });
-                    // 🔊 + 📱 Achievement notification
+ // +  Achievement notification
                     if (window.SoundManager) window.SoundManager.achievementUnlocked();
                     if (window.NotificationManager) window.NotificationManager.achievementUnlocked(a.title || a.name);
                 });
@@ -163,7 +163,7 @@ const App = () => {
         if (interruptionDetected) {
             // (The demolish sound is played in handleDemolish, inside the click
             //  that caused the collapse, so browsers allow the audio.)
-            // 📱 Notification: interrupted
+            // Notification: interrupted
             if (window.NotificationManager) window.NotificationManager.sessionInterrupted();
 
             // Sync interrupted session to backend
@@ -198,7 +198,8 @@ const App = () => {
         // Record when session started (for elapsed-time tracking)
         sessionStartRef.current = Date.now();
 
-        // Reset building state first
+        // Pick the building size from the session length, then reset
+        gameState.setHouseForDuration(duration);
         gameState.resetBuilding();
 
         // Start timer
@@ -207,7 +208,7 @@ const App = () => {
         // Start building
         gameState.startBuilding();
 
-        // 🔊 Sound: session started
+ // Sound: session started
         if (window.SoundManager) window.SoundManager.sessionStart();
 
         setInterruptionDetected(false);
@@ -236,7 +237,7 @@ const App = () => {
                     zIndex: 99999, color: 'white',
                     fontFamily: "'Inter', sans-serif"
                 }}>
-                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🏰</div>
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}><window.FeatherIcon name="home" size={56} gap={0} /></div>
                     <h2 style={{ margin: '0 0 10px', fontWeight: 700 }}>BUILDHAUS</h2>
                     <p style={{ opacity: 0.6, margin: '0 0 30px' }}>Restoring your session...</p>
                     <div style={{
@@ -250,7 +251,7 @@ const App = () => {
                 </div>
             )}
 
-            {/* ⚠️ Backend offline warning banner */}
+            {/* Backend offline warning banner */}
             {!gameState.authRestoring && gameState.backendOffline && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0,
@@ -260,7 +261,7 @@ const App = () => {
                     fontFamily: "'Inter', sans-serif", fontSize: '0.9em',
                     boxShadow: '0 2px 12px rgba(0,0,0,0.4)'
                 }}>
-                    ⚠️ <strong>Server offline</strong> — Start the backend server to save progress &amp; see community data.
+                    <window.FeatherIcon name="alert-triangle" /> <strong>Server offline</strong> — Start the backend server to save progress &amp; see community data.
                     &nbsp;<button
                         onClick={() => window.location.reload()}
                         style={{
@@ -286,7 +287,7 @@ const App = () => {
                         alignItems: 'center', justifyContent: 'center',
                         background: '#1a1a2e', color: 'white'
                     }}>
-                        <h3>🌀 3D Engine Unavailable</h3>
+                        <h3><window.FeatherIcon name="alert-circle" />3D Engine Unavailable</h3>
                         <p style={{ opacity: 0.6 }}>The graphics engine encountered a problem.</p>
                     </div>
                 }>

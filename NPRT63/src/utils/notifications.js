@@ -21,8 +21,8 @@ const NotificationManager = (() => {
         if (permission !== 'granted') return null;
         try {
             const notif = new Notification(title, {
-                icon: '🏰',
-                badge: '🏰',
+                icon: 'vendor/icon.svg',
+                badge: 'vendor/icon.svg',
                 ...options,
             });
             // Auto-close after 6 seconds
@@ -51,14 +51,14 @@ const NotificationManager = (() => {
         // ── Session Notifications ──────────────────────
         sessionComplete(duration) {
             const mins = Math.round(duration / 60);
-            send('🎉 Focus Session Complete!', {
+            send('Focus Session Complete!', {
                 body: `Amazing! You stayed focused for ${mins} minutes. Your building is complete!`,
                 tag: 'session-complete',
             });
         },
 
         sessionInterrupted() {
-            send('💥 Session Interrupted', {
+            send('Session Interrupted', {
                 body: 'Your building was demolished. Stay focused next time!',
                 tag: 'session-interrupted',
             });
@@ -66,14 +66,14 @@ const NotificationManager = (() => {
 
         // ── Streak Notifications ───────────────────────
         streakReminder(currentStreak) {
-            send('🔥 Don\'t break your streak!', {
+            send('Don\'t break your streak!', {
                 body: `You have a ${currentStreak}-day streak! Complete a session today to keep it going.`,
                 tag: 'streak-reminder',
             });
         },
 
         streakMilestone(streak) {
-            send(`🏆 ${streak}-Day Streak!`, {
+            send(`${streak}-Day Streak!`, {
                 body: `Incredible! You've maintained focus for ${streak} days straight. Keep building!`,
                 tag: 'streak-milestone',
             });
@@ -81,7 +81,7 @@ const NotificationManager = (() => {
 
         // ── Achievement Notifications ──────────────────
         achievementUnlocked(name) {
-            send('🌟 Achievement Unlocked!', {
+            send('Achievement Unlocked!', {
                 body: `You earned: ${name}`,
                 tag: 'achievement',
             });

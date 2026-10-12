@@ -1,10 +1,10 @@
 const { useState, useEffect, useMemo } = React;
 
 const SPU_FACULTIES = [
-    { id: 'nas', name: 'Faculty of Natural and Applied Sciences', shortName: 'NAS', color: '#2196F3', emoji: '🔬' },
-    { id: 'edu', name: 'Faculty of Education', shortName: 'Education', color: '#4CAF50', emoji: '📚' },
-    { id: 'ems', name: 'Faculty of Economic and Management Sciences', shortName: 'EMS', color: '#FF9800', emoji: '📊' },
-    { id: 'hum', name: 'Faculty of Humanities', shortName: 'Humanities', color: '#9C27B0', emoji: '🎨' }
+    { id: 'nas', name: 'Faculty of Natural and Applied Sciences', shortName: 'NAS', color: '#2196F3', icon: 'cpu' },
+    { id: 'edu', name: 'Faculty of Education', shortName: 'Education', color: '#4CAF50', icon: 'book-open' },
+    { id: 'ems', name: 'Faculty of Economic and Management Sciences', shortName: 'EMS', color: '#FF9800', icon: 'bar-chart-2' },
+    { id: 'hum', name: 'Faculty of Humanities', shortName: 'Humanities', color: '#9C27B0', icon: 'feather' }
 ];
 
 const useFaculty = (gameState, rewards) => {

@@ -87,7 +87,7 @@ const useGameState = () => {
                         gender: user.gender || prev.builderCustomization.gender
                     }
                 }));
-                console.log('✅ Session restored for:', user.name);
+                console.log('Session restored for:', user.name);
             })
             .catch(err => {
                 if (err.status === 401 || err.status === 404) {
@@ -156,7 +156,7 @@ const useGameState = () => {
                 buildStage: 4,
                 isBuilding: false,
                 completedHouses: [...prev.completedHouses, newCompletedHouse],
-                currentHouse: getNextHouseType(prev.completedHouses.length + 1)
+                currentHouse: prev.currentHouse
             };
         });
     };
@@ -203,6 +203,18 @@ const useGameState = () => {
                 houses: [...prev.purchasedItems.houses, houseType]
             }
         }));
+    };
+
+    // Longer study sessions build bigger buildings.
+    const getHouseForDuration = (seconds) => {
+        const minutes = seconds / 60;
+        return window.BuildingTiers ? window.BuildingTiers.tierFor(minutes).id : 'cottage';
+    };
+
+    const setHouseForDuration = (seconds) => {
+        const houseType = getHouseForDuration(seconds);
+        setGameState(prev => ({ ...prev, currentHouse: houseType }));
+        return houseType;
     };
 
     const getNextHouseType = (houseCount) => {
@@ -295,6 +307,7 @@ const useGameState = () => {
         startBuilding,
         updateBuildStage,
         completeBuilding,
+        setHouseForDuration,
         triggerDemolition,
         resetBuilding,
         updateBuilderCustomization,
