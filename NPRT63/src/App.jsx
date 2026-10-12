@@ -64,6 +64,25 @@ const App = () => {
         };
     }, [gameState.token]);
 
+    // Fresh device / cleared storage: rebuild the community from saved sessions
+    const communityRestoredRef = React.useRef(false);
+    useEffect(() => {
+        if (!gameState.token || gameState.authRestoring || communityRestoredRef.current) return;
+        communityRestoredRef.current = true;
+        if ((gameState.completedHouses || []).length) return;
+        window.api.sessions.getHistory(100, 0).then(res => {
+            const houses = (res.sessions || [])
+                .filter(x => x.completed)
+                .reverse()
+                .map(x => ({
+                    type: window.BuildingTiers.tierFor(x.duration / 60).id,
+                    minutes: Math.round(x.duration / 60),
+                    completedAt: new Date(x.createdAt || x.created_at || Date.now()).getTime()
+                }));
+            gameState.restoreCommunity(houses);
+        }).catch(() => { });
+    }, [gameState.token, gameState.authRestoring]);
+
     // Force building to start when timer becomes active
     useEffect(() => {
         if (timer.isActive && !gameState.isBuilding) {
@@ -72,30 +91,12 @@ const App = () => {
         }
     }, [timer.isActive, gameState.isBuilding]);
 
-    // Automatically progress building stages based on cumulative elapsed time,
-    // so a 25-min session reaches Stage 2, and next session continues from there.
-    //   Stage 1 (foundation) : 0-15 minutes accumulated
-    //   Stage 2 (walls)      : 15-30 minutes accumulated
-    //   Stage 3 (roof)       : 30-45 minutes accumulated
-    //   Stage 4 (complete)   : reaches 45 minutes accumulated
+    // The building rises with THIS session's progress (each session builds one
+    // building, sized by its length); finished buildings stay in the community.
     useEffect(() => {
         if (timer.isActive && timer.duration > 0) {
-            const currentSessionElapsed = timer.duration - timer.timeLeft;
-            const totalAccumulatedSeconds = (rewards.totalFocusTime || 0) + currentSessionElapsed;
-            
-            let houseProgressSeconds = totalAccumulatedSeconds % (45 * 60);
-            if (totalAccumulatedSeconds > 0 && houseProgressSeconds === 0) {
-                houseProgressSeconds = 45 * 60; // Keep it at 45 mins instead of wrapping to 0 instantly
-            }
-
-            let nextStage = 1;
-            if (houseProgressSeconds >= 45 * 60) {       // 45 min
-                nextStage = 4;
-            } else if (houseProgressSeconds >= 30 * 60) { // 30 min
-                nextStage = 3;
-            } else if (houseProgressSeconds >= 15 * 60) { // 15 min
-                nextStage = 2;
-            }
+            const progress = (timer.duration - timer.timeLeft) / timer.duration;
+            const nextStage = Math.min(4, 1 + Math.floor(progress * 4));
 
             if (gameState.buildStage !== nextStage) {
                 gameState.updateBuildStage(nextStage);
@@ -110,20 +111,11 @@ const App = () => {
         }
     }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState, rewards.totalFocusTime]);
 
-    // Handle timer completion
-    // A house is built cumulatively for every 45 minutes of total focus time.
-    const MIN_HOUSE_SECONDS = 45 * 60; // 2700 s
+    // Handle timer completion: the finished building is saved to the community
+    // and stays on screen together with the user's progress.
     useEffect(() => {
         if (timer.isCompleted) {
-            const currentTotal = rewards.totalFocusTime || 0;
-            const newTotal = currentTotal + timer.duration;
-            const currentHouses = Math.floor(currentTotal / MIN_HOUSE_SECONDS);
-            const newHouses = Math.floor(newTotal / MIN_HOUSE_SECONDS);
-            const housesEarned = newHouses - currentHouses;
-
-            for (let i = 0; i < housesEarned; i++) {
-                gameState.completeBuilding(); // adds to village
-            }
+            gameState.completeBuilding(Math.round(timer.duration / 60));
             rewards.awardCoins(timer.duration);
             rewards.updateStreak();
 

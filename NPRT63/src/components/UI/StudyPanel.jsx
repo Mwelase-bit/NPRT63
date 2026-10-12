@@ -3,47 +3,41 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 // ── StudyLogo ────────────────────────────────────────────────────────────────
-// The pixel-house logo for Study AI. This is the ONLY copy of the artwork:
+// The sparkle-bubble logo for Study AI. This is the ONLY copy of the artwork:
 // the floating button, the Study AI nav tab and the panel header all render
 // <StudyLogo size={…} /> so the logo is identical everywhere in the app.
+// Radiant starburst: rounded rays of varying length around a glowing core.
+const STUDY_RAYS = [30, 22, 28, 19, 31, 23, 27, 20, 30, 24, 28, 21].map((len, i) => {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    return { x1: 32 + Math.cos(a) * 6, y1: 32 + Math.sin(a) * 6, x2: 32 + Math.cos(a) * len, y2: 32 + Math.sin(a) * len };
+});
 const StudyLogo = ({ size = 24, className = '', title }) => (
     <svg
         viewBox="0 0 64 64"
         width={size}
         height={size}
         className={`study-logo ${className}`.trim()}
-        shapeRendering="crispEdges"
         xmlns="http://www.w3.org/2000/svg"
         role={title ? 'img' : undefined}
         aria-hidden={title ? undefined : true}
     >
         {title && <title>{title}</title>}
-        {/* Roof */}
-        <rect x="0" y="0" width="64" height="16" fill="#b33a3a" />
-        <rect x="0" y="0" width="64" height="6" fill="#d15b5b" />
-        {/* Upper wall */}
-        <rect x="0" y="16" width="64" height="16" fill="#c68642" />
-        <rect x="0" y="16" width="64" height="4" fill="#dba15f" />
-        {/* Window row */}
-        <rect x="0" y="32" width="64" height="16" fill="#c68642" />
-        <rect x="8" y="36" width="12" height="12" fill="#6ec6ff" />
-        <rect x="8" y="36" width="12" height="4" fill="#9fdcff" />
-        <rect x="44" y="36" width="12" height="12" fill="#6ec6ff" />
-        <rect x="44" y="36" width="12" height="4" fill="#9fdcff" />
-        {/* Base + door */}
-        <rect x="0" y="48" width="64" height="16" fill="#9e9e9e" />
-        <rect x="0" y="48" width="64" height="4" fill="#bdbdbd" />
-        <rect x="26" y="44" width="12" height="20" fill="#5c3a21" />
-        <rect x="26" y="44" width="12" height="3" fill="#7a4f2c" />
-        {/* Block grid lines for pixel-art edges */}
-        <g stroke="rgba(0,0,0,0.25)" strokeWidth="1">
-            <line x1="0" y1="16" x2="64" y2="16" />
-            <line x1="0" y1="32" x2="64" y2="32" />
-            <line x1="0" y1="48" x2="64" y2="48" />
-            <line x1="16" y1="32" x2="16" y2="48" />
-            <line x1="48" y1="32" x2="48" y2="48" />
-            <line x1="32" y1="0" x2="32" y2="16" />
+        <defs>
+            <radialGradient id="studyLogoGrad" cx="50%" cy="50%" r="55%">
+                <stop offset="0" stopColor="#ffd8b8" />
+                <stop offset="0.45" stopColor="#ff9a62" />
+                <stop offset="1" stopColor="#d9582b" />
+            </radialGradient>
+            <radialGradient id="studyLogoGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stopColor="#ff9a62" stopOpacity="0.55" />
+                <stop offset="1" stopColor="#ff9a62" stopOpacity="0" />
+            </radialGradient>
+        </defs>
+        <circle cx="32" cy="32" r="31" fill="url(#studyLogoGlow)" />
+        <g stroke="url(#studyLogoGrad)" strokeWidth="5.2" strokeLinecap="round">
+            {STUDY_RAYS.map((r, i) => <line key={i} {...r} />)}
         </g>
+        <circle cx="32" cy="32" r="6.5" fill="#fff4ea" />
     </svg>
 );
 window.StudyLogo = StudyLogo;

@@ -3596,10 +3596,10 @@ body {
     width: 76px;
     height: 76px;
     border-radius: 18px;
-    background: #2d2d2d;
-    border: 3px solid #1a1a1a;
+    background: radial-gradient(circle at 30% 25%, #3a2a24, #1b1614);
+    border: 2px solid rgba(255,154,98,0.55);
     padding: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    box-shadow: 0 6px 20px rgba(217,88,43,0.35), 0 0 0 4px rgba(255,154,98,0.12);
     cursor: pointer;
     z-index: 9998;
     display: flex;
@@ -3650,7 +3650,7 @@ body {
 }
 
 /* Same pixel-house logo, used in the nav tab and panel header */
-.study-logo { display: inline-block; flex-shrink: 0; image-rendering: pixelated; }
+.study-logo { display: inline-block; flex-shrink: 0; }
 .nav-tab-logo { border-radius: 3px; }
 .study-header-logo { border-radius: 8px; box-shadow: 0 0 0 2px rgba(255,255,255,0.12); }
 
@@ -3930,3 +3930,97 @@ input[type="range"].app-slider:active::-webkit-slider-thumb { transform: scale(1
 .study-panel .study-form-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .study-panel .study-form-group { min-width: 0; }
 .study-panel :is(.study-input, .study-textarea) { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* ── Time picker ── */
+.time-picker {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 14px 0 12px; padding: 18px 12px 12px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 24px rgba(0,0,0,0.18);
+}
+.time-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.time-digits {
+    width: 104px; padding: 4px 0; text-align: center; font-size: 60px; line-height: 1.1; font-weight: 800;
+    font-variant-numeric: tabular-nums; color: #fff; caret-color: #60a5fa;
+    background: transparent; border: 0; border-bottom: 3px solid transparent; outline: none;
+    text-shadow: 0 2px 12px rgba(96,165,250,0.45);
+}
+.time-digits:focus { border-bottom-color: #60a5fa; }
+.time-colon { font-size: 52px; font-weight: 800; color: rgba(255,255,255,0.7); margin-bottom: 26px; }
+.time-step {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    color: #fff; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28);
+    transition: background .15s, transform .1s;
+}
+.time-step:hover { background: rgba(96,165,250,0.55); }
+.time-step:active { transform: scale(0.92); }
+.time-unit { margin-top: 4px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.7); }
+.duration-presets { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.duration-preset {
+    padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+    transition: all .15s;
+}
+.duration-preset:hover { background: rgba(255,255,255,0.22); }
+.duration-preset.active { background: linear-gradient(135deg,#3b82f6,#8b5cf6); border-color: transparent; box-shadow: 0 4px 14px rgba(99,102,241,0.5); }
+
+/* ── See-through timer while a session runs ── */
+.timer-panel.timer-panel--active {
+    background: rgba(15, 23, 42, 0.18);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border-color: rgba(255,255,255,0.12);
+    transition: background 0.4s ease;
+}
+.timer-panel--active .time-remaining,
+.timer-panel--active h2,
+.timer-panel--active .session-info,
+.timer-panel--active .focus-tips { text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+.timer-panel--active .focus-tips { background: rgba(0,0,0,0.15); }
+
+/* ── Session summary + community ── */
+.community-mini {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: 4px 0 10px; padding: 8px 12px; border-radius: 12px; font-size: 13px; color: #fff;
+    background: rgba(74,222,128,0.16); border: 1px solid rgba(74,222,128,0.4);
+}
+.session-summary { text-align: center; color: #fff; padding: 4px 0; }
+.session-summary h3 { margin: 6px 0 4px; font-size: 26px; }
+.summary-badge { width: 56px; height: 56px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%;
+    background: linear-gradient(135deg,#22c55e,#16a34a); box-shadow: 0 6px 20px rgba(34,197,94,0.5); }
+.summary-badge svg { width: 30px; height: 30px; }
+.summary-sub { margin: 0 0 14px; opacity: 0.9; }
+.summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.summary-stats div { padding: 10px 6px; border-radius: 14px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+.summary-stats strong { display: block; font-size: 20px; }
+.summary-stats span { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.75; }
+.summary-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.18); overflow: hidden; }
+.summary-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#4ade80,#22d3ee); transition: width .6s; }
+.summary-next { margin: 8px 0 12px; font-size: 13px; opacity: 0.9; }
+.summary-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 16px; }
+.summary-chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); }
+
+/* Summary card sits to the side and is see-through so the finished building stays visible */
+.timer-panel.timer-panel--summary {
+    max-width: 380px; padding: 20px 22px;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
+.timer-panel--summary > h2 { display: none; }
+.timer-panel--summary .session-summary h3 { font-size: 22px; }
+.timer-panel--summary .summary-stats strong { font-size: 17px; }
+@media (min-width: 900px) {
+    .panel-content:has(.timer-panel--summary) { justify-content: flex-start; align-items: flex-end; padding-left: 32px; }
+}
+@media (max-width: 899px) {
+    .panel-content:has(.timer-panel--summary) { align-items: flex-end; }
+    .timer-panel--summary .summary-chips, .timer-panel--summary .summary-sub { display: none; }
+}
+
+/* Running countdown with labelled hours / minutes / seconds */
+.time-remaining--units { display: flex; justify-content: center; gap: 14px; }
+.tr-unit { display: flex; flex-direction: column; align-items: center; min-width: 76px; }
+.tr-num { font-variant-numeric: tabular-nums; line-height: 1; }
+.tr-lbl { margin-top: 8px; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #fff; opacity: 0.95; font-family: inherit; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }

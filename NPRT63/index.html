@@ -92,7 +92,7 @@
 
                     // Scene setup
                     const scene = new THREE.Scene();
-                    scene.fog = new THREE.Fog(0x87CEEB, 35, 120);
+                    scene.fog = new THREE.Fog(0xbfe3f5, 140, 520);
 
                     const renderer = new THREE.WebGLRenderer({
                         antialias: true,
@@ -249,6 +249,13 @@
             };
             window.feather.replace = safeFeatherReplace;
             setTimeout(safeFeatherReplace, 100);
+            // Panels mount/unmount as the session state changes; swap in icons for new <i data-feather> tags too
+            let featherQueued = false;
+            new MutationObserver(() => {
+                if (featherQueued) return;
+                featherQueued = true;
+                requestAnimationFrame(() => { featherQueued = false; safeFeatherReplace(); });
+            }).observe(document.getElementById('root'), { childList: true, subtree: true });
         };
 
         const startTime = Date.now();

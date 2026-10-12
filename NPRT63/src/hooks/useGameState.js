@@ -139,25 +139,28 @@ const useGameState = () => {
         }));
     };
 
-    const completeBuilding = () => {
-        setGameState(prev => {
-            const newCompletedHouse = {
-                type: prev.currentHouse,
-                position: [
-                    (prev.completedHouses.length % 5) * 4 - 8,
-                    0,
-                    Math.floor(prev.completedHouses.length / 5) * 4 - 4
-                ],
-                completedAt: Date.now()
-            };
+    // A finished session permanently adds its building to the community.
+    // The building type comes from the session length (see BuildingTiers).
+    const completeBuilding = (minutes) => {
+        setGameState(prev => ({
+            ...prev,
+            buildStage: 4,
+            isBuilding: false,
+            completedHouses: [
+                ...(prev.completedHouses || []),
+                { type: prev.currentHouse, minutes: minutes || 0, completedAt: Date.now() }
+            ]
+        }));
+    };
 
-            return {
-                ...prev,
-                buildStage: 4,
-                isBuilding: false,
-                completedHouses: [...prev.completedHouses, newCompletedHouse],
-                currentHouse: prev.currentHouse
-            };
+    // Rebuild the community from the account's saved session history
+    // (used on a fresh device where nothing is stored locally yet).
+    const restoreCommunity = (houses) => {
+        if (!houses || !houses.length) return;
+        setGameState(prev => {
+            if ((prev.completedHouses || []).length) return prev;
+            const last = houses[houses.length - 1];
+            return { ...prev, completedHouses: houses, currentHouse: last.type, buildStage: 4, isBuilding: false };
         });
     };
 
@@ -307,6 +310,7 @@ const useGameState = () => {
         startBuilding,
         updateBuildStage,
         completeBuilding,
+        restoreCommunity,
         setHouseForDuration,
         triggerDemolition,
         resetBuilding,
