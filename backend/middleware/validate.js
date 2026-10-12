@@ -1,6 +1,7 @@
 // middleware/validate.js — Input validation helpers and middleware factories
 
 const VALID_FACULTIES = ['nas', 'edu', 'ems', 'hum'];
+const VALID_GENDERS = ['male', 'female', 'other'];
 
 /**
  * Validates that required fields are present and non-empty.
@@ -16,8 +17,19 @@ const requireFields = (fields) => (req, res, next) => {
             error: `Missing required field(s): ${missing.join(', ')}.`
         });
     }
+    // Required fields are always text — an object/array here would crash bcrypt, .toLowerCase(), etc.
+    const notText = fields.filter(f => typeof req.body[f] !== 'string');
+    if (notText.length > 0) {
+        return res.status(400).json({ error: `Field(s) must be text: ${notText.join(', ')}.` });
+    }
     next();
 };
+
+/** True for a whole number within [min, max] (rejects strings, NaN, fractions) */
+const isIntInRange = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+
+/** Parses a route/query value as a positive integer id, or returns null */
+const parseId = (v) => (/^\d{1,10}$/.test(String(v)) ? parseInt(v, 10) : null);
 
 /**
  * Validates email format
@@ -102,5 +114,8 @@ module.exports = {
     createRateLimiter,
     authLimiter,
     generalLimiter,
-    VALID_FACULTIES
+    VALID_FACULTIES,
+    VALID_GENDERS,
+    isIntInRange,
+    parseId
 };

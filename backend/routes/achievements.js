@@ -30,6 +30,9 @@ router.post('/unlock', authenticate, async (req, res) => {
         if (!achievementId || typeof achievementId !== 'string') {
             return res.status(400).json({ error: 'achievementId is required.' });
         }
+        if (achievementId.length > 64 || !/^[\w-]+$/.test(achievementId)) {
+            return res.status(400).json({ error: 'achievementId must be a short id (letters, numbers, _ or -).' });
+        }
 
         // ON CONFLICT DO NOTHING is the PostgreSQL equivalent of SQLite's INSERT OR IGNORE
         const result = await pool.query(`

@@ -1,13 +1,15 @@
 // routes/ai.js — AI Study features powered by Groq (LLaMA 3)
 // Includes: flashcard generation, quiz generation, quiz attempt recording
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
+const { isIntInRange, parseId } = require('../middleware/validate');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+const GROQ_MODEL   = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 // Coins awarded per flashcard set generated (game integration)
 const COINS_PER_SET = 10;
@@ -15,13 +17,28 @@ const COINS_PER_SET = 10;
 // Quiz coin rewards based on score percentage
 const QUIZ_COINS = { perfect: 25, great: 15, good: 10, pass: 5 };
 
+// Errors from the AI provider. Logged in full on the server, but the client only
+// sees a friendly message — the raw upstream body can contain key fragments.
+class UpstreamError extends Error {}
+
+const aiErrorResponse = (res, err, fallback) => {
+    if (err instanceof UpstreamError) {
+        return res.status(502).json({ error: 'The AI service is unavailable right now. Please try again in a moment.' });
+    }
+    if (err && err.name === 'TimeoutError') {
+        return res.status(504).json({ error: 'The AI took too long to respond. Please try again.' });
+    }
+    return res.status(500).json({ error: fallback });
+};
+
 // ─── Helper: call Groq API ────────────────────────────────────────────────────
 async function callGroq(systemPrompt, userContent, maxTokens = 2048) {
     if (!GROQ_API_KEY) {
-        throw new Error('GROQ_API_KEY is not configured on the server.');
+        throw new UpstreamError('GROQ_API_KEY is not configured on the server.');
     }
 
     const response = await fetch(GROQ_API_URL, {
+        signal: AbortSignal.timeout(45_000),   // never leave the request hanging
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -40,11 +57,14 @@ async function callGroq(systemPrompt, userContent, maxTokens = 2048) {
 
     if (!response.ok) {
         const errBody = await response.text();
-        throw new Error(`Groq API error ${response.status}: ${errBody}`);
+        console.error(`Groq API error ${response.status}: ${errBody}`);
+        throw new UpstreamError(`Groq API error ${response.status}`);
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (typeof content !== 'string') throw new UpstreamError('Groq returned no content');
+    return content.trim();
 }
 
 // ─── POST /api/ai/flashcards — Generate & save a flashcard set ────────────────
@@ -61,6 +81,10 @@ router.post('/flashcards', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'Content too long. Please limit to 8000 characters.' });
         }
         const safeCount = Math.min(Math.max(parseInt(cardCount) || 8, 3), 15);
+        if ((title !== undefined && title !== null && typeof title !== 'string') ||
+            (subject !== undefined && subject !== null && typeof subject !== 'string')) {
+            return res.status(400).json({ error: 'title and subject must be text.' });
+        }
         const safeTitle   = (title   || 'My Flashcard Set').slice(0, 100);
         const safeSubject = (subject || 'General').slice(0, 50);
 
@@ -89,8 +113,7 @@ ${text.trim()}
         } catch (parseErr) {
             console.error('Groq parse error. Raw response:', rawResponse);
             return res.status(502).json({
-                error: 'The AI returned an unexpected format. Please try again.',
-                detail: parseErr.message
+                error: 'The AI returned an unexpected format. Please try again.'
             });
         }
 
@@ -149,7 +172,7 @@ ${text.trim()}
 
     } catch (err) {
         console.error('AI flashcard error:', err);
-        res.status(500).json({ error: err.message || 'Server error generating flashcards.' });
+        aiErrorResponse(res, err, 'Server error generating flashcards.');
     }
 });
 
@@ -185,7 +208,8 @@ router.get('/flashcards', authenticate, async (req, res) => {
 router.get('/flashcards/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const setId  = parseInt(req.params.setId);
+        const setId  = parseId(req.params.setId);
+        if (setId === null) return res.status(404).json({ error: 'Flashcard set not found.' });
 
         const setRes = await pool.query(`
             SELECT id, title, subject, card_count, coins_earned, created_at
@@ -221,7 +245,8 @@ router.get('/flashcards/:setId', authenticate, async (req, res) => {
 router.delete('/flashcards/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const setId  = parseInt(req.params.setId);
+        const setId  = parseId(req.params.setId);
+        if (setId === null) return res.status(404).json({ error: 'Set not found.' });
 
         const result = await pool.query(
             'DELETE FROM flashcard_sets WHERE id = $1 AND user_id = $2',
@@ -243,12 +268,16 @@ router.post('/quiz', authenticate, async (req, res) => {
         const { setId, questionCount = 5 } = req.body;
         const userId = req.user.id;
 
-        if (!setId) return res.status(400).json({ error: 'setId is required.' });
+        if (setId === undefined || setId === null || setId === '') {
+            return res.status(400).json({ error: 'setId is required.' });
+        }
+        const id = parseId(setId);
+        if (id === null) return res.status(404).json({ error: 'Flashcard set not found.' });
 
         // Load the source text for the set
         const setRes = await pool.query(
             'SELECT id, title, subject, source_text FROM flashcard_sets WHERE id = $1 AND user_id = $2',
-            [setId, userId]
+            [id, userId]
         );
 
         if (setRes.rows.length === 0) return res.status(404).json({ error: 'Flashcard set not found.' });
@@ -287,8 +316,7 @@ ${set.source_text.trim()}
         } catch (parseErr) {
             console.error('Quiz parse error. Raw:', rawResponse);
             return res.status(502).json({
-                error: 'The AI returned an unexpected format. Please try again.',
-                detail: parseErr.message
+                error: 'The AI returned an unexpected format. Please try again.'
             });
         }
 
@@ -323,7 +351,7 @@ ${set.source_text.trim()}
 
     } catch (err) {
         console.error('AI quiz error:', err);
-        res.status(500).json({ error: err.message || 'Server error generating quiz.' });
+        aiErrorResponse(res, err, 'Server error generating quiz.');
     }
 });
 
@@ -335,6 +363,20 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
 
         if (setId === undefined || score === undefined || total === undefined) {
             return res.status(400).json({ error: 'setId, score, and total are required.' });
+        }
+        // Quizzes have 3–10 questions (see POST /quiz). Without these checks a
+        // client could post score: 1000, total: 1 and collect coins.
+        if (!isIntInRange(total, 1, 10)) {
+            return res.status(400).json({ error: 'total must be a whole number between 1 and 10.' });
+        }
+        if (!isIntInRange(score, 0, total)) {
+            return res.status(400).json({ error: 'score must be a whole number between 0 and total.' });
+        }
+        const id = parseId(setId);
+        const own = id === null ? { rows: [] } : await pool.query(
+            'SELECT id FROM flashcard_sets WHERE id = $1 AND user_id = $2', [id, userId]);
+        if (own.rows.length === 0) {
+            return res.status(404).json({ error: 'Flashcard set not found.' });
         }
 
         const pct = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -352,7 +394,7 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
             await client.query(`
                 INSERT INTO quiz_attempts (user_id, set_id, score, total, coins_earned)
                 VALUES ($1, $2, $3, $4, $5)
-            `, [userId, setId, score, total, coinsEarned]);
+            `, [userId, id, score, total, coinsEarned]);
 
             // Award coins
             if (coinsEarned > 0) {
@@ -377,7 +419,7 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
 
     } catch (err) {
         console.error('Quiz attempt error:', err);
-        res.status(500).json({ error: err.message || 'Server error saving quiz attempt.' });
+        res.status(500).json({ error: 'Server error saving quiz attempt.' });
     }
 });
 
@@ -385,7 +427,8 @@ router.post('/quiz/attempt', authenticate, async (req, res) => {
 router.get('/quiz/attempts/:setId', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const setId  = parseInt(req.params.setId);
+        const setId  = parseId(req.params.setId);
+        if (setId === null) return res.json({ attempts: [] });
 
         const attemptsRes = await pool.query(`
             SELECT score, total, coins_earned, taken_at

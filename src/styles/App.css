@@ -15,7 +15,10 @@ body {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+    /* No global text-shadow: a white glow on every glyph made text look blurry */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 /* Main app container */
@@ -507,7 +510,7 @@ body {
     display: flex;
     justify-content: space-between;
     font-size: 14px;
-    color: #666;
+    color: #424141;
 }
 
 .timer-controls {
@@ -550,8 +553,8 @@ body {
 
 
 .focus-tips {
-    background: rgba(255, 193, 7, 0.1);
-    border-left: 4px solid #FFC107;
+    background: rgba(255, 193, 7, 0.034);
+    border-left: 4px solid #eeb60e;
     padding: 15px;
     border-radius: 8px;
     text-align: left;
@@ -3218,7 +3221,9 @@ body {
     transition: all 0.2s;
 }
 .study-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
 .study-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
 .study-flip-btn {
     background: linear-gradient(135deg, #7c3aed, #4f46e5);
     border: none;
@@ -3582,3 +3587,440 @@ body {
     justify-content: center;
     width: 100%;
 }
+
+/* ── StudyPanel floating widget ─────────────────────────────────────── */
+.study-panel-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 76px;
+    height: 76px;
+    border-radius: 18px;
+    background: radial-gradient(circle at 30% 25%, #3a2a24, #1b1614);
+    border: 2px solid rgba(255,154,98,0.55);
+    padding: 10px;
+    box-shadow: 0 6px 20px rgba(217,88,43,0.35), 0 0 0 4px rgba(255,154,98,0.12);
+    cursor: pointer;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.study-panel-fab:hover {
+    transform: scale(1.08);
+}
+
+/* Open state = the close (✕) button. ~45% smaller than the 76px FAB (42px)
+   so it is less distracting, and centred on the exact spot the FAB occupied
+   (centre 62px from the right/bottom edges) so a second click closes it. */
+.study-panel-fab.study-panel-fab-open {
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    right: 41px;
+    bottom: 41px;
+    padding: 0;
+    border-width: 2px;
+    border-radius: 12px;
+    background: rgba(55, 65, 81, 0.92);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.study-panel-fab.study-panel-fab-open:hover {
+    transform: scale(1.04);
+    background: rgba(75, 85, 99, 0.95);
+}
+
+.study-panel-fab:focus-visible {
+    outline: 2px solid #8ab4ff;
+    outline-offset: 3px;
+}
+
+.study-panel-fab-icon {
+    width: 100%;
+    height: 100%;
+}
+
+.study-panel-fab-close {
+    font-size: 15px;
+    color: white;
+    line-height: 1;
+}
+
+/* Same pixel-house logo, used in the nav tab and panel header */
+.study-logo { display: inline-block; flex-shrink: 0; }
+.nav-tab-logo { border-radius: 3px; }
+.study-header-logo { border-radius: 8px; box-shadow: 0 0 0 2px rgba(255,255,255,0.12); }
+
+.study-panel-floating {
+    position: fixed;
+    bottom: 108px;
+    right: 24px;
+    width: 400px;
+    max-width: calc(100vw - 48px);
+    max-height: 70vh;
+    overflow-y: auto;
+    z-index: 9997;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    border-radius: 16px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BUILDHAUS panel theme — one look for every panel (Focus, Rewards, Profile,
+   Community, Shop, Achievements, Study AI).
+   Frosted dark glass with white type, the same surface the Focus Session and
+   Study AI panels use, so text stays crisp and readable over the bright 3D
+   sky/grass scene. This block intentionally comes last so it wins over the
+   older per-panel colours above.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+    --panel-bg:        rgba(15, 23, 42, 0.86);
+    --panel-border:    rgba(255, 255, 255, 0.14);
+    --panel-shadow:    0 12px 40px rgba(0, 0, 0, 0.35);
+    --panel-radius:    20px;
+    --panel-width:     600px;
+    --ink:             #f8fafc;   /* headings & values  — 15:1 on panel */
+    --ink-muted:       #cbd5e1;   /* labels & helper text — 10:1 on panel */
+    --card-bg:         rgba(255, 255, 255, 0.07);
+    --card-bg-hover:   rgba(255, 255, 255, 0.11);
+    --card-border:     rgba(255, 255, 255, 0.12);
+    --accent:          #4285f4;
+    --accent-soft:     rgba(66, 133, 244, 0.18);
+}
+
+/* ── Panel surface ─────────────────────────────────────────────────────── */
+.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel {
+    background: var(--panel-bg);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow);
+    color: var(--ink);
+    width: 100%;
+    max-width: var(--panel-width);
+    max-height: calc(100vh - 190px);
+    overflow-y: auto;
+    padding: 28px;
+}
+@media (max-width: 768px) {
+    .timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel {
+        padding: 20px;
+        border-radius: 16px;
+        max-width: 94vw;
+    }
+}
+
+/* No glows anywhere inside panels — they were the main source of blur */
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel, .nav-tabs) * { text-shadow: none !important; }
+
+/* ── Typography: same scale on every panel ─────────────────────────────── */
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) h2 {
+    color: var(--ink);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-align: center;
+    margin-bottom: 22px;
+}
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) :is(h3, h4, h5) { color: var(--ink); font-weight: 600; }
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) :is(p, label, li, small) { color: var(--ink-muted); }
+.duration-selector h4, .minutes-input-container label, .house-preview h4 { color: var(--ink); font-size: 18px; }
+
+.stat-info h3, .stat-info p, .recent-achievements h3, .achievement-info h4, .streak-bonuses h3,
+.daily-summary h3, .weekly-challenge h3, .challenge-info h4, .challenge-progress span, .builder-stats h3,
+.customization-panel h4, .option-group label, .achievement-gallery h3, .achievement-details h4,
+.village-overview h3, .village-stats .stat, .house-types-built h4, .house-type-item, .focus-statistics h3,
+.stat-item span, .stat-item, .current-coins, .item-header h3, .item-price, .unlock-guide h3,
+.achievement-header h3, .achievement-hints h3, .upcoming-achievements h3, .upcoming-info h4,
+.community-stats .stat-info h3, .friends-section h3, .friend-header h4, .house-types h5,
+.community-challenges h3, .leaderboard h3, .player-name {
+    color: var(--ink);
+}
+.session-info, .achievement-info p, .no-achievements, .next-milestone, .progress-item label,
+.challenge-info p, .builder-stats p, .achievement-details p, .stat-item label, .item-description,
+.build-time, .unlock-tips .tip, .achievement-rarity, .achievement-description, .progress-text,
+.hint-item, .upcoming-progress span, .no-upcoming, .community-stats .stat-info p, .achievement-timestamp,
+.unlock-date {
+    color: var(--ink-muted);
+}
+
+/* ── Inner cards ───────────────────────────────────────────────────────── */
+.stat-card, .achievement-item, .challenge-card, .village-stats .stat, .house-type-item, .stat-item,
+.shop-item, .achievement-stats .stat-card, .upcoming-item, .community-stats .stat-card, .friend-card,
+.challenge-item, .leaderboard-list, .avatar-preview, .customization-panel, .daily-login-banner {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--ink);
+    box-shadow: none;
+}
+.achievement-item:hover, .shop-item:hover, .friend-card:hover, .upcoming-item:hover {
+    background: var(--card-bg-hover);
+}
+.achievement-icon { background: rgba(255, 255, 255, 0.12); }
+/* Locked achievements: dimmed but still legible (was nearly invisible) */
+.achievement-item.locked, .achievement-gallery .locked { opacity: 0.7; }
+
+/* ── Pills / tabs inside panels ────────────────────────────────────────── */
+.category-tab, .category-btn, .duration-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--ink-muted);
+}
+.category-tab:hover, .category-btn:hover, .duration-btn:hover {
+    background: var(--card-bg-hover);
+    color: var(--ink);
+}
+.category-tab.active, .category-btn.active, .duration-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.minutes-display { background: var(--accent-soft); }
+.minutes-value { color: #8ab4ff; }
+.minutes-label { color: var(--ink-muted); }
+.focus-tips { background: rgba(255, 193, 7, 0.12); color: var(--ink); }
+.focus-tips p { color: var(--ink); }
+.item-effect { color: #fcd34d; }
+.progress-bar { background: rgba(255, 255, 255, 0.12); }
+
+/* Form controls inside panels */
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) :is(.form-control, select, input[type="text"], input[type="email"]) {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--card-border);
+    color: var(--ink);
+}
+
+/* Nav tab labels: solid, dark on white — no halo */
+.nav-tab { color: #374151; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Shared range slider — the thin style, used by EVERY time/number picker
+   (Focus duration, Study AI card count). Add class="app-slider".
+   The <input> itself is transparent and tall enough to tap (44px on touch
+   screens); only the 4px track and the 16px thumb are drawn, so the touch
+   target never turns into a thick bar.
+   ══════════════════════════════════════════════════════════════════════════ */
+input[type="range"].app-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    max-width: 320px;
+    height: 20px;
+    min-height: 20px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    opacity: 1;
+    --fill: 50%;
+}
+input[type="range"].app-slider:focus { outline: none; }
+input[type="range"].app-slider:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 4px; border-radius: 4px; }
+
+input[type="range"].app-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--accent) 0 var(--fill), rgba(255, 255, 255, 0.25) var(--fill) 100%);
+}
+input[type="range"].app-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.25);
+}
+input[type="range"].app-slider::-moz-range-progress {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+input[type="range"].app-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;               /* centre on the 4px track */
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transition: transform 0.15s ease;
+}
+input[type="range"].app-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+input[type="range"].app-slider:hover::-webkit-slider-thumb,
+input[type="range"].app-slider:active::-webkit-slider-thumb { transform: scale(1.15); }
+@media (max-width: 768px) {
+    /* big invisible tap area, same thin visuals */
+    input[type="range"].app-slider { height: 44px; min-height: 44px; }
+}
+/* Study AI uses its violet accent on the same thin slider */
+.study-panel input[type="range"].app-slider { --accent: #7c3aed; max-width: none; }
+
+/* Panel header with an action button (Profile → Log Out): the title stays
+   centred like every other panel; the button sits in the top-right corner. */
+.panel-header-row {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 22px;
+}
+.panel-header-row h2 { margin-bottom: 0 !important; }
+.panel-header-action {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #fca5a5 !important;           /* readable red on the dark panel */
+    border-color: rgba(252, 165, 165, 0.5) !important;
+}
+@media (max-width: 480px) {
+    .panel-header-row { flex-direction: column; gap: 10px; }
+    .panel-header-action { position: static; transform: none; }
+}
+
+/* ── Study AI panel: same surface + text colours as every other panel ───── */
+.study-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    color: var(--ink);
+    font-family: inherit;
+}
+.study-panel .study-title { color: var(--ink); -webkit-text-fill-color: currentColor; background: none; }
+.study-panel :is(.study-subtitle, .study-tab, .study-set-count, .study-set-meta, .study-empty p,
+    .study-label, .study-char-count, .study-slider-labels, .study-hint, .study-back-btn,
+    .flashcard-hint, .study-nav-btn, .study-loading, .quiz-ring-sub, .study-keyboard-hint,
+    .quiz-option-idle .quiz-option-letter) {
+    color: var(--ink-muted);
+}
+.study-panel .study-tab.active { color: #fff; }
+.study-panel :is(.study-input, .study-textarea)::placeholder { color: #94a3b8; }
+.study-panel .quiz-option-dim .quiz-option-letter { color: #94a3b8; }
+/* No glow on Study text either (the title glow made it look fuzzy), and no
+   text smaller than 12px anywhere in the panel. */
+.study-panel * { text-shadow: none !important; }
+.study-panel :is(.study-subtitle, .study-keyboard-hint, .study-slider-labels, .study-hint, .flashcard-hint) {
+    font-size: 12px;
+}
+/* Outline buttons inside dark panels: lighter blue so they stay readable */
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) .btn-outline-primary {
+    color: #8ab4ff;
+    border-color: #8ab4ff;
+}
+:is(.timer-panel, .reward-panel, .profile-panel, .community-panel, .shop-panel, .achievement-panel) .btn-outline-primary:hover {
+    background: #8ab4ff;
+    color: #0f172a;
+}
+/* Inputs in the narrow floating panel must shrink to fit their grid cell
+   (the Subject field was spilling past the panel edge). */
+.study-panel .study-form-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.study-panel .study-form-group { min-width: 0; }
+.study-panel :is(.study-input, .study-textarea) { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* ── Time picker ── */
+.time-picker {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 14px 0 12px; padding: 18px 12px 12px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 8px 24px rgba(0,0,0,0.18);
+}
+.time-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.time-digits {
+    width: 104px; padding: 4px 0; text-align: center; font-size: 60px; line-height: 1.1; font-weight: 800;
+    font-variant-numeric: tabular-nums; color: #fff; caret-color: #60a5fa;
+    background: transparent; border: 0; border-bottom: 3px solid transparent; outline: none;
+    text-shadow: 0 2px 12px rgba(96,165,250,0.45);
+}
+.time-digits:focus { border-bottom-color: #60a5fa; }
+.time-colon { font-size: 52px; font-weight: 800; color: rgba(255,255,255,0.7); margin-bottom: 26px; }
+.time-step {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    color: #fff; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28);
+    transition: background .15s, transform .1s;
+}
+.time-step:hover { background: rgba(96,165,250,0.55); }
+.time-step:active { transform: scale(0.92); }
+.time-unit { margin-top: 4px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.7); }
+.duration-presets { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.duration-preset {
+    padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+    transition: all .15s;
+}
+.duration-preset:hover { background: rgba(255,255,255,0.22); }
+.duration-preset.active { background: linear-gradient(135deg,#3b82f6,#8b5cf6); border-color: transparent; box-shadow: 0 4px 14px rgba(99,102,241,0.5); }
+
+/* ── See-through timer while a session runs ── */
+.timer-panel.timer-panel--active {
+    background: rgba(15, 23, 42, 0.18);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border-color: rgba(255,255,255,0.12);
+    transition: background 0.4s ease;
+}
+.timer-panel--active .time-remaining,
+.timer-panel--active h2,
+.timer-panel--active .session-info,
+.timer-panel--active .focus-tips { text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+.timer-panel--active .focus-tips { background: rgba(0,0,0,0.15); }
+
+/* ── Session summary + community ── */
+.community-mini {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: 4px 0 10px; padding: 8px 12px; border-radius: 12px; font-size: 13px; color: #fff;
+    background: rgba(74,222,128,0.16); border: 1px solid rgba(74,222,128,0.4);
+}
+.session-summary { text-align: center; color: #fff; padding: 4px 0; }
+.session-summary h3 { margin: 6px 0 4px; font-size: 26px; }
+.summary-badge { width: 56px; height: 56px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%;
+    background: linear-gradient(135deg,#22c55e,#16a34a); box-shadow: 0 6px 20px rgba(34,197,94,0.5); }
+.summary-badge svg { width: 30px; height: 30px; }
+.summary-sub { margin: 0 0 14px; opacity: 0.9; }
+.summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.summary-stats div { padding: 10px 6px; border-radius: 14px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+.summary-stats strong { display: block; font-size: 20px; }
+.summary-stats span { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.75; }
+.summary-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.18); overflow: hidden; }
+.summary-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#4ade80,#22d3ee); transition: width .6s; }
+.summary-next { margin: 8px 0 12px; font-size: 13px; opacity: 0.9; }
+.summary-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 16px; }
+.summary-chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); }
+
+/* Summary card sits to the side and is see-through so the finished building stays visible */
+.timer-panel.timer-panel--summary {
+    max-width: 380px; padding: 20px 22px;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
+.timer-panel--summary > h2 { display: none; }
+.timer-panel--summary .session-summary h3 { font-size: 22px; }
+.timer-panel--summary .summary-stats strong { font-size: 17px; }
+@media (min-width: 900px) {
+    .panel-content:has(.timer-panel--summary) { justify-content: flex-start; align-items: flex-end; padding-left: 32px; }
+}
+@media (max-width: 899px) {
+    .panel-content:has(.timer-panel--summary) { align-items: flex-end; }
+    .timer-panel--summary .summary-chips, .timer-panel--summary .summary-sub { display: none; }
+}
+
+/* Running countdown with labelled hours / minutes / seconds */
+.time-remaining--units { display: flex; justify-content: center; gap: 14px; }
+.tr-unit { display: flex; flex-direction: column; align-items: center; min-width: 76px; }
+.tr-num { font-variant-numeric: tabular-nums; line-height: 1; }
+.tr-lbl { margin-top: 8px; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #fff; opacity: 0.95; font-family: inherit; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }

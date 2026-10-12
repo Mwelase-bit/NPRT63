@@ -24,6 +24,13 @@ const errorHandler = (err, req, res, next) => {
         error = handleDBConstraintError(error);
     }
 
+    // Body-parser errors (malformed JSON, oversized body) carry their own 4xx status
+    if (err.type === 'entity.parse.failed') {
+        error = new AppError('Request body is not valid JSON.', 400);
+    } else if (err.type === 'entity.too.large') {
+        error = new AppError('Request body is too large (max 2 MB).', 413);
+    }
+
     // JWT Errors
     if (error.name === 'JsonWebTokenError') {
         error = new AppError('Invalid token. Please log in again.', 401);
@@ -40,10 +47,13 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // Programming or other unknown errors
+    // Programming or other unknown errors — never leak internals in production
     console.error('ERROR 💥', err);
     res.status(500).json({
         status: 'error',
-        error: `System Error: ${err.message}`
+        error: process.env.NODE_ENV === 'production'
+            ? 'Something went wrong on our side. Please try again.'
+            : `System Error: ${err.message}`
     });
 };
 

@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_render_123';
+const { JWT_SECRET } = require('../config/jwt');
 
 const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;

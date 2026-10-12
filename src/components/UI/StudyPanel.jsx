@@ -2,7 +2,81 @@
 // Runs ALONGSIDE the focus timer — never interrupts it.
 const { useState, useEffect, useCallback, useRef } = React;
 
-const StudyPanel = ({ currentUser, apiBase = '' }) => {
+// ── StudyLogo ────────────────────────────────────────────────────────────────
+// The sparkle-bubble logo for Study AI. This is the ONLY copy of the artwork:
+// the floating button, the Study AI nav tab and the panel header all render
+// <StudyLogo size={…} /> so the logo is identical everywhere in the app.
+// Radiant starburst: rounded rays of varying length around a glowing core.
+const STUDY_RAYS = [30, 22, 28, 19, 31, 23, 27, 20, 30, 24, 28, 21].map((len, i) => {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    return { x1: 32 + Math.cos(a) * 6, y1: 32 + Math.sin(a) * 6, x2: 32 + Math.cos(a) * len, y2: 32 + Math.sin(a) * len };
+});
+const StudyLogo = ({ size = 24, className = '', title }) => (
+    <svg
+        viewBox="0 0 64 64"
+        width={size}
+        height={size}
+        className={`study-logo ${className}`.trim()}
+        xmlns="http://www.w3.org/2000/svg"
+        role={title ? 'img' : undefined}
+        aria-hidden={title ? undefined : true}
+    >
+        {title && <title>{title}</title>}
+        <defs>
+            <radialGradient id="studyLogoGrad" cx="50%" cy="50%" r="55%">
+                <stop offset="0" stopColor="#ffd8b8" />
+                <stop offset="0.45" stopColor="#ff9a62" />
+                <stop offset="1" stopColor="#d9582b" />
+            </radialGradient>
+            <radialGradient id="studyLogoGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stopColor="#ff9a62" stopOpacity="0.55" />
+                <stop offset="1" stopColor="#ff9a62" stopOpacity="0" />
+            </radialGradient>
+        </defs>
+        <circle cx="32" cy="32" r="31" fill="url(#studyLogoGlow)" />
+        <g stroke="url(#studyLogoGrad)" strokeWidth="5.2" strokeLinecap="round">
+            {STUDY_RAYS.map((r, i) => <line key={i} {...r} />)}
+        </g>
+        <circle cx="32" cy="32" r="6.5" fill="#fff4ea" />
+    </svg>
+);
+window.StudyLogo = StudyLogo;
+
+// isOpen / onOpenChange let App control the panel (so the Study AI nav tab and
+// the floating button stay in sync). Without them it manages its own state.
+// Feather icon rendered as inline SVG (stable across React re-renders)
+const StudyIcon = ({ name, size = 16 }) => {
+    const icon = window.feather && window.feather.icons[name];
+    if (!icon) return null;
+    return (
+        <span
+            className="study-inline-icon"
+            style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}
+            dangerouslySetInnerHTML={{ __html: icon.toSvg({ width: size, height: size, 'stroke-width': 2 }) }}
+        />
+    );
+};
+
+const StudyPanel = ({ currentUser, apiBase = '', isOpen: isOpenProp, onOpenChange, timerActive = false }) => {
+    // ── Widget open/closed state ─────────────────────────────────────────────
+    // Panel starts collapsed — only the floating icon shows until clicked.
+    const [isOpenLocal, setIsOpenLocal] = useState(false);
+    const isControlled = typeof isOpenProp === 'boolean';
+    const isOpen = isControlled ? isOpenProp : isOpenLocal;
+    const setIsOpen = useCallback((next) => {
+        const value = typeof next === 'function' ? next(isOpen) : next;
+        if (!isControlled) setIsOpenLocal(value);
+        if (onOpenChange) onOpenChange(value);
+    }, [isOpen, isControlled, onOpenChange]);
+
+    // Escape closes the panel
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKey = (e) => { if (e.key === 'Escape') setIsOpen(false); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isOpen, setIsOpen]);
+    
     // ── View state ────────────────────────────────────────────────────────────
     const [view, setView] = useState('library'); // 'library' | 'generate' | 'study' | 'quiz' | 'quiz-results'
 
@@ -229,8 +303,15 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
             if (res.ok) {
                 setQuizResult(data);
                 showToast(data.message);
+            } else {
+                throw new Error(data.error || `HTTP ${res.status}`);
             }
-        } catch (e) { console.error('Submit quiz error:', e); }
+        } catch (e) {
+            console.error('Submit quiz error:', e);
+            // Still show the score locally so the results screen isn't blank
+            setQuizResult({ percentage: total > 0 ? Math.round((quizScore / total) * 100) : 0, coinsEarned: 0 });
+            showToast('Score shown, but it could not be saved — check your connection.');
+        }
         setView('quiz-results');
     };
 
@@ -239,22 +320,42 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
 
     // ─── Keyboard support ─────────────────────────────────────────────────────
     useEffect(() => {
-        if (view !== 'study') return;
+        if (!isOpen || view !== 'study') return;
         const handler = (e) => {
+            // Don't hijack keys while the user is typing somewhere
+            const tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (e.key === 'ArrowRight') nextCard();
             if (e.key === 'ArrowLeft')  prevCard();
             if (e.key === ' ')          { e.preventDefault(); setFlipped(f => !f); }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [view, totalCards]);
+    }, [isOpen, view, totalCards]);
 
     // ─── Format date ──────────────────────────────────────────────────────────
     const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
     // ─── Render ───────────────────────────────────────────────────────────────
-    return (
-        <div className="study-panel">
+       return (
+        <>
+            {/* ── Floating toggle icon — always visible, like a chat widget ── */}
+            <button
+                className={`study-panel-fab ${isOpen ? 'study-panel-fab-open' : ''}`}
+                onClick={() => setIsOpen(o => !o)}
+                aria-label={isOpen ? 'Close study panel' : 'Open study panel'}
+                title={isOpen ? 'Close study panel' : 'Open AI Study'}
+            >
+                {isOpen ? (
+                    <span className="study-panel-fab-close" aria-hidden="true"><StudyIcon name="x" size={18} /></span>
+                ) : (
+                    <StudyLogo className="study-panel-fab-icon" />
+                )}
+            </button>
+
+            {/* ── Panel itself — only mounted while open ── */}
+            {isOpen && (
+        <div className="study-panel study-panel-floating">
             {/* Toast */}
             {toastMsg && (
                 <div className="study-toast">
@@ -262,18 +363,22 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                 </div>
             )}
 
+
             {/* Header */}
             <div className="study-header">
                 <div className="study-header-left">
+                    <StudyLogo size={36} className="study-header-logo" />
                     <div>
                         <h2 className="study-title">AI Study</h2>
                         <p className="study-subtitle">Flashcards powered by LLaMA 3</p>
                     </div>
                 </div>
-                <div className="study-timer-badge">
-                    <span className="timer-dot"></span>
-                    Focus timer keeps running
-                </div>
+                {timerActive && (
+                    <div className="study-timer-badge">
+                        <span className="timer-dot"></span>
+                        Focus timer keeps running
+                    </div>
+                )}
             </div>
 
             {/* Tab Navigation */}
@@ -288,19 +393,20 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     className={`study-tab ${view === 'generate' ? 'active' : ''}`}
                     onClick={() => setView('generate')}
                 >
-                    ✨ Generate
+                    <StudyIcon name="edit-3" /> Generate
                 </button>
                 {view === 'study' && (
                     <button className="study-tab active">Study</button>
                 )}
                 {(view === 'quiz' || view === 'quiz-results') && (
-                    <button className="study-tab active">🧠 Quiz</button>
+                    <button className="study-tab active"><StudyIcon name="help-circle" /> Quiz</button>
                 )}
             </div>
 
             {/* ── Library View ── */}
             {view === 'library' && (
                 <div className="study-library">
+                    {quizError && <div className="study-error"><StudyIcon name="alert-triangle" /> {quizError}</div>}
                     {loadingSets ? (
                         <div className="study-loading">
                             <div className="study-spinner"></div>
@@ -312,7 +418,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             <h3>No flashcard sets yet</h3>
                             <p>Paste your lecture notes and let AI do the hard work!</p>
                             <button className="btn-study-primary" onClick={() => setView('generate')}>
-                                ✨ Generate My First Set
+                                <StudyIcon name="edit-3" /> Generate My First Set
                             </button>
                         </div>
                     ) : (
@@ -341,13 +447,13 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                                     title="Take a quiz on this set"
                                                     disabled={quizGenerating}
                                                 >
-                                                    {quizGenerating && quizSetId === s.id ? '...' : '🧠 Quiz'}
+                                                    {quizGenerating && quizSetId === s.id ? '...' : <><StudyIcon name="help-circle" size={13} /> Quiz</>}
                                                 </button>
                                                 <button
                                                     className="study-set-delete"
                                                     onClick={(e) => deleteSet(s.id, e)}
                                                     title="Delete set"
-                                                >✕</button>
+                                                ><StudyIcon name="x" size={14} /></button>
                                             </div>
                                         </div>
                                     </div>
@@ -406,12 +512,14 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                             Number of Flashcards: <strong>{cardCount}</strong>
                         </label>
                         <input
-                            className="study-slider"
+                            className="app-slider study-slider"
                             type="range"
                             min={3}
                             max={15}
                             value={cardCount}
-                            onChange={e => setCardCount(parseInt(e.target.value))}
+                            style={{ '--fill': `${((cardCount - 3) / (15 - 3)) * 100}%` }}
+                            aria-label="Number of flashcards"
+                            onChange={e => setCardCount(parseInt(e.target.value, 10))}
                         />
                         <div className="study-slider-labels">
                             <span>3</span><span>Quick Review</span><span>15</span>
@@ -419,7 +527,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                     </div>
 
                     {genError && (
-                        <div className="study-error">⚠️ {genError}</div>
+                        <div className="study-error"><StudyIcon name="alert-triangle" /> {genError}</div>
                     )}
 
                     <button
@@ -433,7 +541,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                 AI is thinking…
                             </>
                         ) : (
-                            <>✨ Generate Flashcards (+10 coins)</>
+                            <><StudyIcon name="edit-3" /> Generate Flashcards (+10 coins)</>
                         )}
                     </button>
                     <p className="study-hint">Your focus timer keeps running while AI generates your cards.</p>
@@ -593,8 +701,8 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                                     >
                                         <span className="quiz-option-letter">{['A','B','C','D'][i]}</span>
                                         <span className="quiz-option-text">{opt}</span>
-                                        {answered && i === correct && <span className="quiz-tick">✓</span>}
-                                        {answered && i === chosen && i !== correct && <span className="quiz-cross">✗</span>}
+                                        {answered && i === correct && <span className="quiz-tick"><StudyIcon name="check" size={14} /></span>}
+                                        {answered && i === chosen && i !== correct && <span className="quiz-cross"><StudyIcon name="x" size={14} /></span>}
                                     </button>
                                 );
                             })}
@@ -603,7 +711,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         {/* Explanation */}
                         {showExplanation && (
                             <div className={`quiz-explanation ${answeredMap[quizIndex] === q.answer ? 'quiz-exp-correct' : 'quiz-exp-wrong'}`}>
-                                <strong>{answeredMap[quizIndex] === q.answer ? '✓ Correct!' : '✗ Incorrect'}</strong>
+                                <strong>{answeredMap[quizIndex] === q.answer ? <><StudyIcon name="check-circle" /> Correct!</> : <><StudyIcon name="x-circle" /> Incorrect</>}</strong>
                                 {' — '}{q.explanation}
                             </div>
                         )}
@@ -611,7 +719,7 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         {/* Next / Finish */}
                         {answered && (
                             <button className="btn-study-primary btn-full quiz-next-btn" onClick={handleNextQuestion}>
-                                {quizIndex < total - 1 ? 'Next Question →' : '🏁 See Results'}
+                                {quizIndex < total - 1 ? 'Next Question →' : <><StudyIcon name="flag" /> See Results</>}
                             </button>
                         )}
                     </div>
@@ -648,25 +756,25 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                         </div>
 
                         <div className="quiz-result-msg">
-                            {quizResult?.percentage === 100 && '🏆 Perfect Score! Incredible!'}
-                            {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && '🌟 Great work! Almost perfect!'}
-                            {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && '👍 Good job! Keep practising!'}
-                            {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && '📚 Keep studying — you\'ll get there!'}
-                            {quizResult?.percentage < 40 && '💪 Don\'t give up! Review your flashcards.'}
+                            {quizResult?.percentage === 100 && <><StudyIcon name="award" /> Perfect Score! Incredible!</>}
+                            {quizResult?.percentage >= 80 && quizResult?.percentage < 100 && <><StudyIcon name="star" /> Great work! Almost perfect!</>}
+                            {quizResult?.percentage >= 60 && quizResult?.percentage < 80 && <><StudyIcon name="thumbs-up" /> Good job! Keep practising!</>}
+                            {quizResult?.percentage >= 40 && quizResult?.percentage < 60 && <><StudyIcon name="book" /> Keep studying — you'll get there!</>}
+                            {quizResult?.percentage < 40 && <><StudyIcon name="refresh-cw" /> Don't give up! Review your flashcards.</>}
                         </div>
 
                         {quizResult?.coinsEarned > 0 && (
                             <div className="quiz-coins-badge">
-                                🪙 +{quizResult.coinsEarned} coins earned!
+                                <StudyIcon name="dollar-sign" /> +{quizResult.coinsEarned} coins earned!
                             </div>
                         )}
 
                         <div className="quiz-results-actions">
                             <button className="btn-study-primary" onClick={retryQuiz} disabled={quizGenerating}>
-                                {quizGenerating ? '⏳ Generating…' : '🔄 Try Again'}
+                                {quizGenerating ? <><StudyIcon name="loader" /> Generating…</> : <><StudyIcon name="rotate-ccw" /> Try Again</>}
                             </button>
-                            <button className="study-nav-btn" onClick={() => setView('study')}>
-                                📖 Review Cards
+                            <button className="study-nav-btn" onClick={() => openSet(quizSetId)}>
+                                <StudyIcon name="book-open" /> Review Cards
                             </button>
                             <button className="study-nav-btn" onClick={() => setView('library')}>
                                 ← Library
@@ -676,6 +784,8 @@ const StudyPanel = ({ currentUser, apiBase = '' }) => {
                 </div>
             )}
         </div>
+            )}
+        </>
     );
 };
 

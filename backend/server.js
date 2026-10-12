@@ -1,111 +1,16 @@
 // server.js — BUILDHAUS Express API Server
 require('dotenv').config({ path: __dirname + '/.env' });
 
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
 
 // Initialise database (creates/migrates tables and seeds shop data)
 const { pool, initDatabase } = require('./database');
 
-// ─── Import Routes ────────────────────────────────────────────────────────────
-const authRoutes = require('./routes/auth');
-const usersRoutes = require('./routes/users');
-const sessionRoutes = require('./routes/sessions');
-const leaderboardRoutes = require('./routes/leaderboard');
-const shopRoutes = require('./routes/shop');
-const achievementRoutes = require('./routes/achievements');
-const aiRoutes          = require('./routes/ai');
+// Express app (all routes + middleware) lives in app.js so it can be tested
+const app = require('./app');
 
-// ─── Import Middleware ────────────────────────────────────────────────────────
-const { sanitiseBody, generalLimiter } = require('./middleware/validate');
-const errorHandler = require('./middleware/errorHandler');
-
-const app = express();
 const PORT = process.env.PORT || 3001;
-
-// ─── Global Middleware ────────────────────────────────────────────────────────
-const isProduction = process.env.NODE_ENV === 'production';
-// app.use(helmet({
-//     contentSecurityPolicy: false,
-//     crossOriginEmbedderPolicy: false
-// }));
-app.use(cors()); // Allow all origins (tighten in production if needed)
-app.use(express.json({ limit: '2mb' }));
-app.use(sanitiseBody);       // Trim all incoming string fields
-app.use(generalLimiter);     // 60 req/min per IP globally
-
-// Request logger (development)
-if (!isProduction) {
-    app.use((req, res, next) => {
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-        next();
-    });
-}
-
-// ─── Serve frontend static files ──────────────────────────────────────────────
-// In production, the backend serves the frontend so everything runs on one port.
-app.use(express.static(path.join(__dirname, '..'), {
-    extensions: ['html'],
-    index: 'index.html'
-}));
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/shop', shopRoutes);
-app.use('/api/achievements', achievementRoutes);
-app.use('/api/ai',           aiRoutes);
-
-// ─── Health check ─────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        message: 'BUILDHAUS API is running',
-        version: '2.0.0',
-        timestamp: new Date().toISOString(),
-        endpoints: [
-            'POST   /api/auth/register',
-            'POST   /api/auth/login',
-            'GET    /api/auth/me',
-            'PUT    /api/users/profile',
-            'PUT    /api/users/password',
-            'GET    /api/users/stats',
-            'POST   /api/sessions',
-            'GET    /api/sessions',
-            'GET    /api/sessions/stats',
-            'GET    /api/leaderboard/faculty',
-            'GET    /api/leaderboard/interfaculty',
-            'GET    /api/leaderboard/global',
-            'GET    /api/leaderboard/summary',
-            'GET    /api/shop',
-            'POST   /api/shop/buy',
-            'GET    /api/shop/owned',
-            'GET    /api/achievements',
-            'POST   /api/achievements/unlock',
-            'POST   /api/ai/flashcards',
-            'GET    /api/ai/flashcards',
-            'GET    /api/ai/flashcards/:setId',
-            'DELETE /api/ai/flashcards/:setId'
-        ]
-    });
-});
-
-// ─── 404 handler ──────────────────────────────────────────────────────────────
-app.use((req, res) => {
-    res.status(404).json({
-        error: `Route ${req.method} ${req.path} not found.`,
-        hint: 'Check GET /api/health for a list of available endpoints.'
-    });
-});
-
-// ─── Global error handler ─────────────────────────────────────────────────────
-app.use(errorHandler);
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 const server = http.createServer(app);

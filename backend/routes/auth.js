@@ -6,9 +6,9 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../database');
 const AppError = require('../utils/AppError');
 const { authenticate } = require('../middleware/auth');
-const { requireFields, validateEmail, validateFaculty, authLimiter } = require('../middleware/validate');
+const { requireFields, validateEmail, validateFaculty, authLimiter, VALID_GENDERS } = require('../middleware/validate');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_render_123';
+const { JWT_SECRET } = require('../config/jwt');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const generateToken = (user) =>
@@ -43,6 +43,13 @@ router.post(
             }
             if (name.length < 2 || name.length > 80) {
                 return res.status(400).json({ error: 'Name must be between 2 and 80 characters.' });
+            }
+            if (gender !== undefined && gender !== null && gender !== '' && !VALID_GENDERS.includes(gender)) {
+                return res.status(400).json({ error: 'Gender must be one of: male, female, other.' });
+            }
+            if (student_no !== undefined && student_no !== null && student_no !== '' &&
+                (typeof student_no !== 'string' || student_no.length > 20)) {
+                return res.status(400).json({ error: 'Student number must be text of at most 20 characters.' });
             }
 
             // Check if email already in use

@@ -93,8 +93,8 @@ const ShopPanel = ({ gameState, rewards }) => {
 
             <div className="coins-display">
                 <div className="current-coins">
-                    <i data-feather="dollar-sign"></i>
-                    <span>{rewards.coins} Coins</span>
+                    <span className="currency-symbol">R</span>
+                    <span>{rewards.coins}<span>.00 </span> Coins</span>
                 </div>
             </div>
 
@@ -123,7 +123,7 @@ const ShopPanel = ({ gameState, rewards }) => {
                     >
                         <div className="item-header">
                             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.2em' }}>{item.emoji}</span>
+                                <window.FeatherIcon name={({ outfit: 'user', hat: 'shield', tool: 'tool', house: 'home', booster: 'zap' })[item.category] || 'gift'} size={20} />
                                 {item.name}
                             </h3>
                             {item.owned && (
@@ -144,7 +144,7 @@ const ShopPanel = ({ gameState, rewards }) => {
 
                         <div className="item-footer">
                             <div className="item-price">
-                                <i data-feather="dollar-sign"></i> <span>{item.price}</span>
+                                <span className="currency-symbol">R</span> <span>{item.price}</span>
                             </div>
 
                             <button
@@ -155,7 +155,7 @@ const ShopPanel = ({ gameState, rewards }) => {
                                 {item.owned ? (
                                     <> <i data-feather="check"></i> Owned </>
                                 ) : rewards.coins < item.price ? (
-                                    <> <i data-feather="dollar-sign"></i> Need {item.price - rewards.coins} more </>
+                                    <> <span className="currency-symbol"> Need R</span>{item.price - rewards.coins}<span>.00</span> more </>
                                 ) : (
                                     <> <i data-feather="shopping-cart"></i> Buy Now </>
                                 )}
@@ -169,8 +169,7 @@ const ShopPanel = ({ gameState, rewards }) => {
             <div className="unlock-guide">
                 <h3>Tips</h3>
                 <div className="unlock-tips">
-                    <div className="tip">
-                        <i data-feather="dollar-sign"></i>
+                    <div className="tip"> 
                         <span>Start focus sessions to earn 1 coin per minute</span>
                     </div>
                     <div className="tip">

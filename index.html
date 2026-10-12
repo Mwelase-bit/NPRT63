@@ -10,8 +10,21 @@
     <script src="vendor/three.min.js"></script>
     <script src="vendor/babel.min.js"></script>
     <script src="vendor/feather.min.js"></script>
+    <script>
+        // Inline feather icon as a React component (survives re-renders)
+        window.FeatherIcon = function (props) {
+            var icon = window.feather && window.feather.icons[props.name];
+            if (!icon) return null;
+            var size = props.size || 16;
+            return window.React.createElement('span', {
+                className: 'feather-inline',
+                style: Object.assign({ display: 'inline-flex', verticalAlign: 'middle', marginRight: props.gap === undefined ? 6 : props.gap, color: props.color }, props.style),
+                dangerouslySetInnerHTML: { __html: icon.toSvg({ width: size, height: size, 'stroke-width': 2 }) }
+            });
+        };
+    </script>
     <link href="vendor/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="src/styles/App.css?v=20260619a">
+    <link rel="stylesheet" href="src/styles/App.css?v=20260925a">
 </head>
 
 <body>
@@ -79,7 +92,7 @@
 
                     // Scene setup
                     const scene = new THREE.Scene();
-                    scene.fog = new THREE.Fog(0x87CEEB, 10, 50);
+                    scene.fog = new THREE.Fog(0xbfe3f5, 140, 520);
 
                     const renderer = new THREE.WebGLRenderer({
                         antialias: true,
@@ -164,7 +177,7 @@
                         padding: '20px', textAlign: 'center'
                     }
                 },
-                    React.createElement('h3', null, '🎮 Graphics Support Missing'),
+                    React.createElement('h3', null, 'Graphics Support Missing'),
                     React.createElement('p', { style: { opacity: 0.7 } }, webglError),
                     React.createElement('p', { style: { fontSize: '0.8em', marginTop: '10px' } },
                         'You can still use the timer and rewards system below.')
@@ -179,34 +192,36 @@
         window.ThreeCanvas = ThreeCanvas;
     </script>
 
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/sounds.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/notifications.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/api.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/storage.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/achievements.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/coins.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/builderCustomizations.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/houseTypes.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useGameState.js?v=20260619a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useTimer.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useRewards.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/TimerPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RewardPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ProfilePanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/CommunityPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ShopPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/AchievementPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20260619a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useFaculty.js?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20260617a"></script>
-    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20260617a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/sounds.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/notifications.js?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/api.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/storage.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/achievements.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/utils/coins.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/builderCustomizations.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/data/houseTypes.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useGameState.js?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useTimer.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useRewards.js?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/TimerPanel.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RewardPanel.jsx?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ProfilePanel.jsx?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/CommunityPanel.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/ShopPanel.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/AchievementPanel.jsx?v=20260925a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/StudyPanel.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/Buildings.js?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/Environments.js?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/GameScene.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/hooks/useFaculty.js?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/components/UI/RegistrationModal.jsx?v=20261012a"></script>
+    <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap" src="src/App.jsx?v=20261012a"></script>
 
     <script type="text/babel" data-presets="react-classic" data-plugins="iife-wrap">
         // Babel loads external files via async XHR — poll until all globals are ready, then mount.
         const REQUIRED = ['App','useGameState','useTimer','useRewards','useFaculty',
             'TimerPanel','RewardPanel','ProfilePanel','CommunityPanel','ShopPanel',
-            'AchievementPanel','StudyPanel','GameScene','RegistrationModal','ThreeCanvas',
+            'AchievementPanel','StudyPanel','BuildingFactory','EnvironmentFactory','GameScene','RegistrationModal','ThreeCanvas',
             'Storage','ACHIEVEMENTS','SPU_FACULTIES','api'];
 
         const mountApp = () => {
@@ -234,6 +249,13 @@
             };
             window.feather.replace = safeFeatherReplace;
             setTimeout(safeFeatherReplace, 100);
+            // Panels mount/unmount as the session state changes; swap in icons for new <i data-feather> tags too
+            let featherQueued = false;
+            new MutationObserver(() => {
+                if (featherQueued) return;
+                featherQueued = true;
+                requestAnimationFrame(() => { featherQueued = false; safeFeatherReplace(); });
+            }).observe(document.getElementById('root'), { childList: true, subtree: true });
         };
 
         const startTime = Date.now();

@@ -42,7 +42,9 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
         return "#9E9E9E";
     };
 
-    const getRankEmoji = (index) => ["🥇", "🥈", "🥉"][index] || `#${index + 1}`;
+    const getRankEmoji = (index) => index < 3
+        ? <window.FeatherIcon name="award" size={20} gap={0} color={['#FFD700', '#C0C0C0', '#CD7F32'][index]} />
+        : `#${index + 1}`;
 
     const tabs = [
         { id: 'global', label: 'Global', icon: 'globe' },
@@ -101,7 +103,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
                         {loading ? <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading Global Players...</p> : globalLeaderboard.slice(0, 10).map((player, index) => (
                             <div key={player.id} className="friend-card" style={player.isCurrentUser ? { borderColor: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)' } : {}}>
                                 <div className="friend-avatar">
-                                    <span className="avatar-emoji">{['👷', '👩‍💼', '👨‍🔧', '👩‍🎨', '👨‍🎓', '👩‍💻'][player.id % 6]}</span>
+                                    <span className="avatar-emoji"><window.FeatherIcon name="user" size={22} gap={0} /></span>
                                     <div className="level-badge" style={{ backgroundColor: '#CD7F32' }}>{player.rank}</div>
                                 </div>
                                 <div className="friend-info">
@@ -155,7 +157,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
                                 padding: '20px', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '20px'
                             }}>
                                 <div style={{ fontSize: '48px', background: 'rgba(0,0,0,0.2)', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {faculty?.userFacultyInfo?.emoji || '🎓'}
+                                    <window.FeatherIcon name="book-open" size={36} gap={0} />
                                 </div>
                                 <div>
                                     <h3 style={{ margin: '0 0 8px 0', fontSize: '1.4em' }}>{faculty?.userFacultyInfo?.name || gameState.faculty}</h3>
@@ -218,7 +220,7 @@ const CommunityPanel = ({ gameState, rewards, faculty }) => {
 
                                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                 <div style={{ fontSize: '24px', background: 'rgba(255,255,255,0.1)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    {fac.emoji}
+                                                    <window.FeatherIcon name={fac.icon || 'users'} size={24} gap={0} />
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: 'bold', fontSize: '1.1em', color: fac.color }}>

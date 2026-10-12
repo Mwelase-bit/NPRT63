@@ -89,7 +89,7 @@ router.get('/stats', authenticate, async (req, res) => {
             pool.query(`
                 SELECT
                     COUNT(*)                                                  AS total_sessions,
-                    SUM(CASE WHEN completed THEN 1 ELSE 0 END)               AS completed_sessions,
+                    COALESCE(SUM(CASE WHEN completed THEN 1 ELSE 0 END), 0) AS completed_sessions,
                     COALESCE(MAX(CASE WHEN completed THEN elapsed END), 0)   AS longest_session
                 FROM focus_sessions WHERE user_id = $1
             `, [userId]),

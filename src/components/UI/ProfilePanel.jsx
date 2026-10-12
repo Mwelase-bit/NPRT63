@@ -30,9 +30,10 @@ const ProfilePanel = ({ gameState, rewards }) => {
 
     return (
         <div className="profile-panel" style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="panel-header-row">
                 <h2>Builder Profile</h2>
                 <button
+                    className="panel-header-action"
                     onClick={() => {
                         gameState.logout();
                     }}

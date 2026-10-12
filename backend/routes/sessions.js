@@ -3,66 +3,77 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
+const { isIntInRange } = require('../middleware/validate');
 
 // ─── POST /api/sessions — Record a completed or interrupted focus session ──────
+const MAX_SESSION_SEC   = 86_400;   // 24 hours
+const MIN_HOUSE_SECONDS = 45 * 60;  // one house per 45 cumulative focus minutes (matches App.jsx)
+
 router.post('/', authenticate, async (req, res) => {
+    const { duration, elapsed, completed } = req.body;
+    const userId = req.user.id;
+
+    // Whole seconds only — the DB columns are INTEGER and Postgres rejects 1500.5
+    if (!isIntInRange(duration, 1, MAX_SESSION_SEC)) {
+        return res.status(400).json({ error: 'duration must be a whole number of seconds between 1 and 86400.' });
+    }
+    if (!isIntInRange(elapsed, 0, MAX_SESSION_SEC)) {
+        return res.status(400).json({ error: 'elapsed must be a whole number of seconds between 0 and 86400.' });
+    }
+    if (elapsed > duration) {
+        return res.status(400).json({ error: 'elapsed cannot exceed duration.' });
+    }
+    // Must be a real boolean: the string "false" is truthy and used to count as a completed session
+    if (typeof completed !== 'boolean') {
+        return res.status(400).json({ error: 'completed must be true or false.' });
+    }
+    // A completed session ran its full length (the timer sends elapsed === duration)
+    if (completed && elapsed !== duration) {
+        return res.status(400).json({ error: 'A completed session must have elapsed equal to duration.' });
+    }
+
+    const client = await pool.connect();
     try {
-        const { duration, elapsed, completed } = req.body;
-        const userId = req.user.id;
+        await client.query('BEGIN');
 
-        if (!duration || !Number.isFinite(duration) || duration <= 0 || duration > 86_400) {
-            return res.status(400).json({ error: 'duration must be a positive number of seconds (max 24 hours).' });
-        }
-        if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0 || elapsed > 86_400) {
-            return res.status(400).json({ error: 'elapsed must be a non-negative number of seconds (max 24 hours).' });
-        }
-        if (elapsed > duration) {
-            return res.status(400).json({ error: 'elapsed cannot exceed duration.' });
-        }
+        // Lock the user row so two sessions finishing together can't double-count houses/streaks
+        const userRes = await client.query(
+            'SELECT streak, last_focus_date, total_focus_sec FROM users WHERE id = $1 FOR UPDATE',
+            [userId]
+        );
+        const user = userRes.rows[0];
 
-        const isCompleted = !!completed;
-
-        // ── Coin calculation ────────────────────────────────────────────────────
         let coinsEarned = 0;
-        if (isCompleted) {
-            const userRes = await pool.query('SELECT streak FROM users WHERE id = $1', [userId]);
-            const streak = userRes.rows[0]?.streak || 0;
-            const baseCoins = Math.floor(elapsed / 60);
-            const streakBonus = Math.min(streak * 5, 50);
+        if (completed) {
+            const baseCoins   = Math.floor(elapsed / 60);
+            const streakBonus = Math.min((user.streak || 0) * 5, 50);
             coinsEarned = baseCoins + streakBonus;
         }
 
-        // ── Insert session record ──────────────────────────────────────────────
-        await pool.query(`
+        await client.query(`
             INSERT INTO focus_sessions (user_id, duration, elapsed, completed, coins_earned)
             VALUES ($1, $2, $3, $4, $5)
-        `, [userId, duration, elapsed, isCompleted, coinsEarned]);
+        `, [userId, duration, elapsed, completed, coinsEarned]);
 
-        // ── Update user stats if session was completed ─────────────────────────
-        if (isCompleted) {
+        if (completed) {
             const today     = new Date().toISOString().split('T')[0];
             const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0];
-
-            const userRes = await pool.query('SELECT streak, last_focus_date FROM users WHERE id = $1', [userId]);
-            const user = userRes.rows[0];
 
             let newStreak = user.streak || 0;
             if (user.last_focus_date === yesterday) {
                 newStreak += 1;         // Continue streak
             } else if (user.last_focus_date !== today) {
-                newStreak = 1;          // Streak broken — reset to 1
+                newStreak = 1;          // Streak broken (or first ever) — start at 1
             }
             // else: already focused today — streak unchanged
 
-            // House building is cumulative across sessions (45 minutes per house)
-            const MIN_HOUSE_SECONDS = 45 * 60;
-            const currentTotal = user.total_focus_sec || 0;
-            const newTotal = currentTotal + elapsed;
-            const currentHouses = Math.floor(currentTotal / MIN_HOUSE_SECONDS);
-            const newHouses = Math.floor(newTotal / MIN_HOUSE_SECONDS);
-            const houseIncrement = newHouses - currentHouses;
+            // Houses are cumulative across sessions. total_focus_sec was previously
+            // never SELECTed, so every session was treated as starting from 0.
+            const currentTotal   = user.total_focus_sec || 0;
+            const newTotal       = currentTotal + elapsed;
+            const houseIncrement = Math.floor(newTotal / MIN_HOUSE_SECONDS) - Math.floor(currentTotal / MIN_HOUSE_SECONDS);
 
-            await pool.query(`
+            await client.query(`
                 UPDATE users
                 SET coins           = coins + $1,
                     streak          = $2,
@@ -73,14 +84,19 @@ router.post('/', authenticate, async (req, res) => {
             `, [coinsEarned, newStreak, today, houseIncrement, elapsed, userId]);
         }
 
+        await client.query('COMMIT');
+
         res.status(201).json({
-            message: isCompleted ? 'Session completed! Coins awarded.' : 'Session recorded.',
+            message: completed ? 'Session completed! Coins awarded.' : 'Session recorded.',
             coinsEarned,
-            completed: isCompleted
+            completed
         });
     } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
         console.error('Session record error:', err);
         res.status(500).json({ error: 'Server error recording session.' });
+    } finally {
+        client.release();
     }
 });
 
@@ -88,8 +104,11 @@ router.post('/', authenticate, async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const limit  = Math.min(parseInt(req.query.limit) || 20, 100);
-        const offset = parseInt(req.query.offset) || 0;
+        // Clamp paging — a negative LIMIT/OFFSET is a Postgres error (500)
+        const rawLimit  = parseInt(req.query.limit, 10);
+        const rawOffset = parseInt(req.query.offset, 10);
+        const limit  = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 20, 1), 100);
+        const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
 
         const [sessionsRes, countRes] = await Promise.all([
             pool.query(`
@@ -136,7 +155,7 @@ router.get('/stats', authenticate, async (req, res) => {
             pool.query(`
                 SELECT
                     COUNT(*)                                                AS total_sessions,
-                    SUM(CASE WHEN completed THEN 1 ELSE 0 END)             AS completed_sessions,
+                    COALESCE(SUM(CASE WHEN completed THEN 1 ELSE 0 END), 0) AS completed_sessions,
                     COALESCE(MAX(CASE WHEN completed THEN elapsed END), 0) AS longest_session
                 FROM focus_sessions WHERE user_id = $1
             `, [userId]),

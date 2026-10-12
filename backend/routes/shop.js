@@ -41,51 +41,62 @@ router.get('/', authenticate, async (req, res) => {
 
 // ─── POST /api/shop/buy — Purchase an item ─────────────────────────────────────
 router.post('/buy', authenticate, async (req, res) => {
+    const { itemId } = req.body;
+    const userId = req.user.id;
+
+    if (!itemId) {
+        return res.status(400).json({ error: 'itemId is required.' });
+    }
+    if (typeof itemId !== 'string' || itemId.length > 64) {
+        return res.status(400).json({ error: 'itemId must be a short text id.' });
+    }
+
     const client = await pool.connect();
     try {
-        const { itemId } = req.body;
-        const userId = req.user.id;
-
-        if (!itemId) {
-            return res.status(400).json({ error: 'itemId is required.' });
-        }
-
-        // Verify item exists
         const itemRes = await client.query('SELECT * FROM shop_items WHERE item_id = $1', [itemId]);
         if (itemRes.rows.length === 0) {
             return res.status(404).json({ error: `Item '${itemId}' not found in the shop.` });
         }
         const item = itemRes.rows[0];
 
-        // Check not already owned
-        const alreadyRes = await client.query('SELECT id FROM user_items WHERE user_id = $1 AND item_id = $2', [userId, itemId]);
+        // Everything below runs in ONE transaction. Previously the balance was
+        // checked before BEGIN, so two quick purchases could both pass the check
+        // and drive the balance negative.
+        await client.query('BEGIN');
+
+        const alreadyRes = await client.query(
+            'SELECT id FROM user_items WHERE user_id = $1 AND item_id = $2', [userId, itemId]);
         if (alreadyRes.rows.length > 0) {
+            await client.query('ROLLBACK');
             return res.status(409).json({ error: 'You already own this item.' });
         }
 
-        // Check coin balance
-        const userRes = await client.query('SELECT coins FROM users WHERE id = $1', [userId]);
-        const user = userRes.rows[0];
-        if (user.coins < item.price) {
-            return res.status(402).json({ error: `Not enough coins. You have ${user.coins} but this costs ${item.price}.` });
+        // Conditional debit: only succeeds if the balance still covers the price
+        const debit = await client.query(
+            'UPDATE users SET coins = coins - $1 WHERE id = $2 AND coins >= $1 RETURNING coins',
+            [item.price, userId]
+        );
+        if (debit.rows.length === 0) {
+            await client.query('ROLLBACK');
+            const bal = await client.query('SELECT coins FROM users WHERE id = $1', [userId]);
+            const coins = bal.rows[0] ? bal.rows[0].coins : 0;
+            return res.status(402).json({ error: `Not enough coins. You have ${coins} but this costs ${item.price}.` });
         }
 
-        // Perform purchase atomically
-        await client.query('BEGIN');
-        await client.query('UPDATE users SET coins = coins - $1 WHERE id = $2', [item.price, userId]);
         await client.query('INSERT INTO user_items (user_id, item_id) VALUES ($1, $2)', [userId, itemId]);
         await client.query('COMMIT');
-
-        const updatedRes = await client.query('SELECT coins FROM users WHERE id = $1', [userId]);
 
         res.status(201).json({
             message:        `You purchased "${item.name}"! Enjoy your new item.`,
             itemId:         item.item_id,
             coinsSpent:     item.price,
-            coinsRemaining: updatedRes.rows[0].coins
+            coinsRemaining: debit.rows[0].coins
         });
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'You already own this item.' });
+        }
         console.error('Shop purchase error:', err);
         res.status(500).json({ error: 'Server error processing purchase.' });
     } finally {

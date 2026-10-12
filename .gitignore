@@ -28,3 +28,4 @@ replit.nix
 tmp/
 dist/
 prettier_err.txt
+node_modules/
