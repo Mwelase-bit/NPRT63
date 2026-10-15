@@ -1807,7 +1807,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         // Show destruction complete message
         setTimeout(() => {
             showDestructionComplete(scene);
-        }, 4000);
+        }, 1200);
         
         // Reset after 6 seconds and return to home page
         setTimeout(() => {
@@ -1821,15 +1821,16 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
     
     // Create dramatic explosion particles
     const createExplosionParticles = (scene) => {
-        const particleCount = 200;
+        // Collapse look: a soft dust cloud (muted greys), not a fireball
+        const particleCount = 70;
         const particles = new THREE.Group();
         
         for (let i = 0; i < particleCount; i++) {
-            const particleGeometry = new THREE.SphereGeometry(0.05 + Math.random() * 0.1);
+            const particleGeometry = new THREE.SphereGeometry(0.12 + Math.random() * 0.16, 8, 6);
             const particleMaterial = new THREE.MeshLambertMaterial({ 
-                color: [0xFF4500, 0xFF6347, 0xFF8C00, 0xFFD700][Math.floor(Math.random() * 4)],
+                color: [0xe3e6ea, 0xcfd3d8, 0xb8bec6, 0x9aa2ab][Math.floor(Math.random() * 4)],
                 transparent: true,
-                opacity: 1
+                opacity: 0.55
             });
             
             const particle = new THREE.Mesh(particleGeometry, particleMaterial);
@@ -1847,9 +1848,9 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
             
             // Store velocity for animation
             particle.userData.velocity = {
-                x: (Math.random() - 0.5) * 0.3,
-                y: Math.random() * 0.4 + 0.2,
-                z: (Math.random() - 0.5) * 0.3
+                x: (Math.random() - 0.5) * 0.14,
+                y: Math.random() * 0.18 + 0.06,
+                z: (Math.random() - 0.5) * 0.14
             };
             
             particle.userData.life = 1.0;
@@ -1993,8 +1994,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         if (!camera) return;
         
         const originalPosition = camera.position.clone();
-        const shakeIntensity = 0.3;
-        const shakeDuration = 3000;
+        const shakeIntensity = 0.12;   // subtle
+        const shakeDuration = 1600;
         const startTime = Date.now();
         
         const shake = () => {
@@ -2025,7 +2026,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
                 Math.random() * 0.2 + 0.1
             );
             const debrisMaterial = new THREE.MeshLambertMaterial({ 
-                color: new THREE.Color().setHSL(Math.random() * 0.1, 0.7, 0.3)
+                color: new THREE.Color().setHSL(0.08, 0.12, 0.35 + Math.random() * 0.2)
             });
             const debris = new THREE.Mesh(debrisGeometry, debrisMaterial);
             
@@ -2070,51 +2071,27 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
     };
     
     // Show destruction complete message
+    // Minimal message shown while the building falls. The reason is stored by the app:
+    // 'left' = the student left the page for too long, otherwise the scene was clicked.
     const showDestructionComplete = (scene) => {
-        // Create a text element (using HTML overlay)
-        const messageDiv = document.createElement('div');
-        messageDiv.innerHTML = `
-            <div style="
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0, 0, 0, 0.9);
-                color: #ff4444;
-                padding: 30px;
-                border-radius: 15px;
-                font-size: 24px;
-                font-weight: bold;
-                text-align: center;
-                z-index: 1000;
-                border: 3px solid #ff4444;
-                box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
-                animation: pulse 1s infinite;
-            ">
-                BUILDING DESTROYED!<br>
-                <div style="font-size: 16px; margin-top: 10px; color: #fff;">
-                    Returning to home page...
-                </div>
-            </div>
-            <style>
-                @keyframes pulse {
-                    0% { transform: translate(-50%, -50%) scale(1); }
-                    50% { transform: translate(-50%, -50%) scale(1.05); }
-                    100% { transform: translate(-50%, -50%) scale(1); }
-                }
-            </style>
-        `;
-        
-        document.body.appendChild(messageDiv);
-        
-        // Remove message after 2 seconds
-        setTimeout(() => {
-            if (messageDiv.parentNode) {
-                messageDiv.parentNode.removeChild(messageDiv);
-            }
-        }, 2000);
+        let reason = '';
+        try { reason = sessionStorage.getItem('bh_collapsed_reason') || ''; } catch (e) { /* storage unavailable */ }
+        const card = document.createElement('div');
+        card.className = 'collapse-card';
+        card.setAttribute('role', 'alert');
+        const title = document.createElement('strong');
+        title.textContent = 'Building collapsed';
+        const sub = document.createElement('span');
+        sub.textContent = reason === 'left'
+            ? 'You left the page for too long.'
+            : 'The scene was clicked during your session.';
+        card.appendChild(title);
+        card.appendChild(sub);
+        document.body.appendChild(card);
+        // Fade away on its own; the page reloads shortly after
+        setTimeout(() => { if (card.parentNode) card.parentNode.removeChild(card); }, 4000);
     };
-    
+
     // Reset house after destruction
     const resetHouse = (scene) => {
         const houseParts = scene.userData.houseParts;
@@ -2157,6 +2134,20 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         createCurrentBuilding(scene, gameState.currentHouse);
         scene.userData.houseType = gameState.currentHouse;
     }, [gameState.currentHouse]);
+
+    // When the student changes their character on the Profile screen, rebuild the site so the
+    // builder on it matches. Never while a session is running (that would reset the building).
+    const currentLook = window.AvatarFactory ? window.AvatarFactory.normalize(gameState.builderCustomization) : null;
+    const lookKey = JSON.stringify(currentLook || {});
+    const lookFirstRun = useRef(true);
+    useEffect(() => {
+        if (lookFirstRun.current) { lookFirstRun.current = false; return; }
+        if (!sceneRef.current || (gameStateRef.current && gameStateRef.current.isBuilding)) return;
+        window.BuilderAppearance = currentLook;       // child effects run before App's, so set it here too
+        const { scene } = sceneRef.current;
+        createCurrentBuilding(scene, gameStateRef.current.currentHouse);
+        scene.userData.houseType = gameStateRef.current.currentHouse;
+    }, [lookKey]);
 
     // Enhanced animation loop with building phases
     useEffect(() => {

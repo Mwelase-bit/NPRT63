@@ -449,9 +449,17 @@ const RoomsTab = ({ rooms, groups, selected, setSelected, presetGroupId, onStart
 };
 
 // ── The panel ────────────────────────────────────────────────────────────────
-const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onViewConsumed }) => {
+// Props:
+//   embedded / section  - used inside Community: the parent picks 'friends' | 'groups' | 'rooms'
+//                         and this component hides its own title and tab bar
+//   onStartRoom(room)   - starts the student's own timer for a study room
+//   activeRoomId        - the room the running session counts for (if any)
+//   initialView         - { tab, id, message } set when an invite link or QR scan lands here
+//   onBadges(counts)    - tells the parent how many requests / open rooms are waiting
+const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onViewConsumed, embedded, section, onBadges }) => {
     const token = gameState && gameState.token;
-    const [tab, setTab] = useState('friends');
+    const [tabState, setTab] = useState('friends');
+    const tab = embedded && section ? section : tabState;
     const [me, setMe] = useState(null);
     const [friends, setFriends] = useState(null);
     const [groups, setGroups] = useState(null);
@@ -488,7 +496,7 @@ const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onView
     // An invite link or QR scan sends the student straight to the right place
     useEffect(() => {
         if (!initialView) return;
-        setTab(initialView.tab || 'friends');
+        if (!embedded) setTab(initialView.tab || 'friends');
         if (initialView.tab === 'groups') setSelGroup(initialView.id || null);
         if (initialView.tab === 'rooms') setSelRoom(initialView.id || null);
         if (initialView.message) notify(initialView.message);
@@ -505,6 +513,11 @@ const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onView
         } catch (e) { notify(e.message || 'Something went wrong.', 'error'); }
     }, [notify, refreshAll]);
 
+    // Let the parent show badges (waiting friend requests, open rooms to join)
+    useEffect(() => {
+        if (onBadges) onBadges({ friends: friends ? friends.incoming.length : 0, rooms: rooms ? rooms.joinable.length : 0 });
+    }, [friends, rooms]);
+
     if (!token) return <div className="social-panel"><div className="so-empty">Sign in to add friends and join study groups.</div></div>;
 
     const tabs = [
@@ -514,13 +527,15 @@ const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onView
     ];
 
     return (
-        <div className="social-panel">
-            <div className="so-header">
-                <div>
-                    <h2>Study together</h2>
-                    <p className="so-subtitle">Add friends, join your class group and focus side by side.</p>
+        <div className={embedded ? 'social-panel social-embedded' : 'social-panel'}>
+            {!embedded && (
+                <div className="so-header">
+                    <div>
+                        <h2>Study together</h2>
+                        <p className="so-subtitle">Add friends, join your class group and focus side by side.</p>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <form className="so-form so-codebox" onSubmit={(e) => { e.preventDefault(); const c = soParseInvite(codeInput); if (c) setDialogCode(c); }}>
                 <input className="so-input" type="text" value={codeInput} placeholder="Have a code or link? Paste it here" onChange={(e) => setCodeInput(e.target.value)} aria-label="Invite code or link" />
@@ -529,14 +544,14 @@ const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onView
 
             {notice && <div className={`so-notice so-notice--${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.text}</div>}
 
-            <div className="so-tabs" role="tablist">
+            {!embedded && <div className="so-tabs" role="tablist">
                 {tabs.map(t => (
                     <button key={t.id} role="tab" aria-selected={tab === t.id} className={`so-tab ${tab === t.id ? 'active' : ''}`}
                         onClick={() => { setTab(t.id); if (t.id === 'groups') setSelGroup(null); if (t.id === 'rooms') setSelRoom(null); }}>
                         {t.label}{t.badge > 0 && <span className="so-badge">{t.badge}</span>}
                     </button>
                 ))}
-            </div>
+            </div>}
 
             <div className="so-body">
                 {tab === 'friends' && <FriendsTab me={me} friends={friends} run={run} notify={notify} />}
@@ -555,4 +570,5 @@ const SocialPanel = ({ gameState, onStartRoom, activeRoomId, initialView, onView
 };
 
 window.SocialPanel = SocialPanel;
+window.SocialUI = { SoAvatar, SoIcon, soTime, SO_FACULTY };
 window.InviteDialog = InviteDialog;

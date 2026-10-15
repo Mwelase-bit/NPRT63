@@ -1,314 +1,285 @@
+// ProfilePanel.jsx - the student's profile: a live 3D character they can customise,
+// their level and stats, achievements, houses built and a downloadable focus report.
+//
+// Appearance changes update the game state at once. The App saves them to the server a moment
+// later (see "saved character" in App.jsx), so the look follows the student to any device.
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const ProfilePanel = ({ gameState, rewards }) => {
-    const [showCustomization, setShowCustomization] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
 
-    const handleCustomizationChange = (category, value) => {
-        gameState.updateBuilderCustomization(category, value);
+// Display names for the shop items that unlock character options
+const PF_NAMES = {
+    default: 'Classic overalls', outfit_architect: 'Architect suit', outfit_wizard: 'Wizard robes', outfit_ninja: 'Ninja gear',
+    outfit_knight: 'Knight armour', outfit_astronaut: 'Astronaut suit',
+    hardhat: 'Hard hat', cap: 'Cap', none: 'None', hat_tophat: 'Top hat', hat_crown: 'Gold crown', hat_beret: 'Beret', hat_beanie: 'Beanie', hat_helmet: 'Space helmet',
+    hammer: 'Hammer', tool_wrench: 'Golden wrench', tool_paintbrush: 'Paintbrush', tool_drill: 'Power drill', tool_wand: 'Enchanted wand'
+};
+const PF_OUTFITS = ['default', 'outfit_architect', 'outfit_wizard', 'outfit_ninja', 'outfit_knight', 'outfit_astronaut'];
+const PF_HATS = ['hardhat', 'cap', 'none', 'hat_tophat', 'hat_crown', 'hat_beret', 'hat_beanie', 'hat_helmet'];
+const PF_TOOLS = ['hammer', 'none', 'tool_wrench', 'tool_paintbrush', 'tool_drill', 'tool_wand'];
+const PF_FREE = ['default', 'hardhat', 'cap', 'none', 'hammer'];
+const PF_FACULTY = { nas: 'Natural & Applied Sciences', edu: 'Education', ems: 'Economic & Management Sciences', hum: 'Humanities' };
+
+const pfTime = (sec) => {
+    sec = Math.max(0, Math.round(sec || 0));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+};
+
+// A row of colour swatches
+const PfSwatches = ({ label, colors, value, onPick }) => (
+    <div className="pf-group">
+        <div className="pf-label">{label}</div>
+        <div className="pf-swatches" role="group" aria-label={label}>
+            {colors.map(c => (
+                <button key={c} type="button" className={`pf-swatch ${String(value).toLowerCase() === c.toLowerCase() ? 'is-on' : ''}`}
+                    style={{ background: c }} aria-label={`${label} ${c}`} aria-pressed={String(value).toLowerCase() === c.toLowerCase()} onClick={() => onPick(c)} />
+            ))}
+        </div>
+    </div>
+);
+
+// A row of text options; options can be locked (shop item not bought yet)
+const PfChoices = ({ label, options, value, onPick, owned, names }) => (
+    <div className="pf-group">
+        <div className="pf-label">{label}</div>
+        <div className="pf-choices" role="group" aria-label={label}>
+            {options.map(o => {
+                const locked = owned && !PF_FREE.includes(o) && !owned.includes(o);
+                return (
+                    <button key={o} type="button" className={`pf-choice ${value === o ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
+                        aria-pressed={value === o} disabled={locked} title={locked ? 'Buy this in the shop to use it' : ''} onClick={() => onPick(o)}>
+                        {locked && <window.FeatherIcon name="lock" size={12} gap={4} />}
+                        {(names && names[o]) || PF_NAMES[o] || o.charAt(0).toUpperCase() + o.slice(1)}
+                    </button>
+                );
+            })}
+        </div>
+    </div>
+);
+
+const ProfilePanel = ({ gameState, rewards }) => {
+    const c = gameState.builderCustomization || {};
+    const look = useMemo(() => window.AvatarFactory.lookFromCustomization(c), [JSON.stringify(c)]);
+    const OPT = window.AvatarFactory.OPTIONS;
+
+    const [view, setView] = useState('full');
+    const [tab, setTab] = useState('face');
+    const [owned, setOwned] = useState(null);              // shop item ids the student owns (null while loading)
+    const [syncState, setSyncState] = useState('');        // '' | 'saving' | 'saved' | 'error'
+    const [reportError, setReportError] = useState('');
+    const lastSavedProfile = useRef(null);
+
+    const set = (key, value) => gameState.updateBuilderCustomization(key, value);
+
+    // Which shop items does the student own? (unlocks outfits, hats and tools below)
+    useEffect(() => {
+        if (!gameState.token) return;
+        window.api.users.getAvatar()
+            .then(r => setOwned(Array.isArray(r.owned) ? r.owned : []))
+            .catch(() => setOwned([]));          // offline: only the free options are offered
+    }, [gameState.token]);
+
+    // The App tells us how saving the look is going
+    useEffect(() => {
+        const onSync = (e) => setSyncState(e.detail || '');
+        window.addEventListener('bh-avatar-sync', onSync);
+        return () => window.removeEventListener('bh-avatar-sync', onSync);
+    }, []);
+
+    // Name and gender are saved through the profile endpoint, a moment after typing stops
+    useEffect(() => {
+        if (!gameState.token) return;
+        const snapshot = `${c.name || ''}|${c.gender || ''}`;
+        if (lastSavedProfile.current === null) { lastSavedProfile.current = snapshot; return; }   // do not save what we just loaded
+        if (snapshot === lastSavedProfile.current) return;
+        const name = (c.name || '').trim();
+        if (name.length < 2) return;                      // too short to save; keep typing
+        const timer = setTimeout(async () => {
+            try {
+                setSyncState('saving');
+                await window.api.users.updateProfile({ name, gender: c.gender });
+                lastSavedProfile.current = snapshot;
+                setSyncState('saved');
+            } catch (err) {
+                console.error('Failed to save profile', err);
+                setSyncState('error');
+            }
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [c.name, c.gender, gameState.token]);
+
+    // Level: one level per focused hour; the bar shows progress to the next
+    const totalSec = rewards.totalFocusTime || 0;
+    const level = Math.floor(totalSec / 3600) + 1;
+    const levelPct = Math.round(((totalSec % 3600) / 3600) * 100);
+    const houses = gameState.completedHouses || [];
+    const houseCounts = houses.reduce((acc, h) => { acc[h.type] = (acc[h.type] || 0) + 1; return acc; }, {});
+    const achievements = rewards.allAchievements || [];
+    const unlockedCount = achievements.filter(a => a.unlocked).length;
+
+    // A real, downloadable focus report (replaces the old pop-up that only claimed to save one)
+    const downloadReport = () => {
+        try {
+            setReportError('');
+            const lines = [
+                'BUILDHAUS focus report',
+                `Generated: ${new Date().toLocaleString()}`,
+                '',
+                `Student: ${c.name || 'Student'}`,
+                `Faculty: ${PF_FACULTY[gameState.user && gameState.user.faculty] || (gameState.user && gameState.user.faculty) || 'n/a'}`,
+                '',
+                `Total focus time: ${pfTime(totalSec)}`,
+                `Longest session: ${Math.floor((rewards.longestSession || 0) / 60)} minutes`,
+                `Average session: ${Math.floor((rewards.averageSession || 0) / 60)} minutes`,
+                `Success rate: ${rewards.successRate}%`,
+                `Current streak: ${rewards.streak} days`,
+                `Houses built: ${houses.length}`,
+                `Achievements: ${unlockedCount} of ${achievements.length}`,
+                '',
+                'Unlocked achievements:',
+                ...achievements.filter(a => a.unlocked).map(a => `  - ${a.name}: ${a.description}`)
+            ];
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `buildhaus-focus-report-${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (err) {
+            console.error('Report failed', err);
+            setReportError('Could not create the report. Please try again.');
+        }
     };
 
-    // Auto-save name and gender to the backend
-    useEffect(() => {
-        if (!gameState?.token || !showCustomization) return;
-
-        const saveTimeout = setTimeout(async () => {
-            setIsSaving(true);
-            try {
-                await window.api.users.updateProfile({
-                    name: gameState.builderCustomization.name,
-                    gender: gameState.builderCustomization.gender
-                });
-            } catch (err) {
-                console.error("Failed to auto-save profile to backend", err);
-            } finally {
-                setIsSaving(false);
-            }
-        }, 800); // 800ms debounce
-
-        return () => clearTimeout(saveTimeout);
-    }, [gameState.builderCustomization.name, gameState.builderCustomization.gender, gameState?.token, showCustomization]);
+    const tabs = [{ id: 'face', label: 'Face' }, { id: 'hair', label: 'Hair' }, { id: 'outfit', label: 'Outfit' }, { id: 'gear', label: 'Hat & tool' }];
+    const stat = (value, label) => <div className="pf-stat"><strong>{value}</strong><span>{label}</span></div>;
 
     return (
-        <div className="profile-panel" style={{ position: 'relative' }}>
-            <div className="panel-header-row">
-                <h2>Builder Profile</h2>
-                <button
-                    className="panel-header-action"
-                    onClick={() => {
-                        gameState.logout();
-                    }}
-                    style={{
-                        background: 'transparent',
-                        border: '1px solid rgba(255, 107, 107, 0.4)',
-                        color: '#ff6b6b',
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.9em'
-                    }}
-                >
-                    <i data-feather="log-out" style={{ width: '16px', height: '16px' }}></i> Log Out
+        <div className="profile-panel pf-panel">
+            <div className="pf-top">
+                <h2>Profile</h2>
+                <button type="button" className="pf-btn pf-btn--danger" onClick={() => gameState.logout()}>
+                    <window.FeatherIcon name="log-out" size={14} gap={6} /> Log out
                 </button>
             </div>
 
-            {/* Builder Info */}
-            <div className="builder-info">
-                <div className="builder-avatar">
-                    <div className="avatar-preview">
-                        {/* Simple 2D representation of the builder */}
-                        <div
-                            className="avatar-body"
-                            style={{ backgroundColor: gameState.builderCustomization.overallColor }}
-                        ></div>
-                        <div
-                            className="avatar-head"
-                            style={{ backgroundColor: gameState.builderCustomization.skinColor }}
-                        ></div>
-                        <div
-                            className="avatar-hat"
-                            style={{ backgroundColor: gameState.builderCustomization.hatColor }}
-                        ></div>
+            {/* Hero: the character and who they are */}
+            <div className="pf-hero">
+                <div className="pf-stage">
+                    <window.CharacterPreview look={look} view={view} />
+                    <div className="pf-stage-bar" role="group" aria-label="Camera">
+                        <button type="button" className={`pf-pill ${view === 'full' ? 'is-on' : ''}`} onClick={() => setView('full')}>Full body</button>
+                        <button type="button" className={`pf-pill ${view === 'face' ? 'is-on' : ''}`} onClick={() => setView('face')}>Face</button>
                     </div>
-
-                    <button
-                        className={`btn ${showCustomization ? 'btn-primary' : 'btn-outline-primary'}`}
-                        onClick={() => setShowCustomization(!showCustomization)}
-                    >
-                        <i data-feather={showCustomization ? "check" : "edit-2"}></i>
-                        {showCustomization ? 'Done' : 'Customize'}
-                    </button>
+                    <div className="pf-stage-hint">Drag to turn</div>
                 </div>
 
-                <div className="builder-stats">
-                    <h3>{gameState.builderCustomization.name || 'Builder'}</h3>
-                    <p>Gender: {gameState.builderCustomization.gender}</p>
-                    <p>Level: {Math.floor(rewards.totalFocusTime / 3600) + 1}</p>
-                    <p>Experience: {rewards.totalFocusTime} seconds</p>
+                <div className="pf-info">
+                    <label className="pf-label" htmlFor="pf-name">Builder name</label>
+                    <input id="pf-name" className="pf-input" type="text" maxLength={40} value={c.name || ''} placeholder="Your name"
+                        onChange={(e) => set('name', e.target.value)} />
+                    <div className="pf-sub">{PF_FACULTY[gameState.user && gameState.user.faculty] || ''}</div>
+
+                    <div className="pf-level">
+                        <div className="pf-level-row"><strong>Level {level}</strong><span>{pfTime(totalSec)} focused</span></div>
+                        <div className="pf-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={levelPct} aria-label="Progress to the next level"><span style={{ width: `${levelPct}%` }} /></div>
+                        <div className="pf-sub">{Math.ceil((3600 - (totalSec % 3600)) / 60)} min of focus to level {level + 1}</div>
+                    </div>
+
+                    <div className="pf-stats">
+                        {stat(rewards.streak, 'Streak')}
+                        {stat(houses.length, 'Houses')}
+                        {stat(rewards.coins, 'Coins')}
+                        {stat(`${unlockedCount}/${achievements.length}`, 'Badges')}
+                    </div>
+                    <div className={`pf-sync ${syncState}`} aria-live="polite">
+                        {syncState === 'saving' && 'Saving…'}
+                        {syncState === 'saved' && 'Saved'}
+                        {syncState === 'error' && 'Could not save. Check your connection; your changes are kept on this device.'}
+                    </div>
                 </div>
             </div>
 
-            {/* Customization Panel */}
-            {showCustomization && (
-                <div className="customization-panel">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h4 style={{ margin: 0 }}>Customize Your Builder</h4>
-                        {isSaving && <span style={{ fontSize: '0.85em', color: '#4CAF50', display: 'flex', alignItems: 'center', gap: '4px' }}><i data-feather="refresh-cw" className="spinning-icon" style={{ width: '12px' }}></i> Saving...</span>}
-                    </div>
-
-                    <div className="customization-options">
-                        <div className="option-group">
-                            <label>Name:</label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={gameState.builderCustomization.name || ''}
-                                onChange={(e) => handleCustomizationChange('name', e.target.value)}
-                                placeholder="Enter builder name"
-                            />
-                        </div>
-
-                        <div className="option-group">
-                            <label>Gender:</label>
-                            <div className="radio-group">
-                                {['male', 'female', 'other'].map(g => (
-                                    <label key={g} style={{ textTransform: 'capitalize' }}>
-                                        <input
-                                            type="radio"
-                                            name="gender"
-                                            value={g}
-                                            checked={gameState.builderCustomization.gender === g}
-                                            onChange={(e) => handleCustomizationChange('gender', e.target.value)}
-                                        />
-                                        {g}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="option-group">
-                            <label>Overall Color:</label>
-                            <div className="color-selector">
-                                {['#4169E1', '#FF8C00', '#32CD32', '#FF69B4', '#9370DB'].map(color => (
-                                    <button
-                                        key={color}
-                                        className={`color-option ${gameState.builderCustomization.overallColor === color ? 'selected' : ''}`}
-                                        style={{ backgroundColor: color }}
-                                        onClick={() => handleCustomizationChange('overallColor', color)}
-                                    ></button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="option-group">
-                            <label>Hat Color:</label>
-                            <div className="color-selector">
-                                {['#FFD700', '#FF4500', '#00CED1', '#FF1493', '#7FFF00'].map(color => (
-                                    <button
-                                        key={color}
-                                        className={`color-option ${gameState.builderCustomization.hatColor === color ? 'selected' : ''}`}
-                                        style={{ backgroundColor: color }}
-                                        onClick={() => handleCustomizationChange('hatColor', color)}
-                                    ></button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="option-group">
-                            <label>Skin Color:</label>
-                            <div className="color-selector">
-                                {['#FDBCB4', '#F1C27D', '#E0AC69', '#C68642', '#8D5524'].map(color => (
-                                    <button
-                                        key={color}
-                                        className={`color-option ${gameState.builderCustomization.skinColor === color ? 'selected' : ''}`}
-                                        style={{ backgroundColor: color }}
-                                        onClick={() => handleCustomizationChange('skinColor', color)}
-                                    ></button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+            {/* Customise */}
+            <section className="pf-section">
+                <h3>Customise your builder</h3>
+                <div className="pf-tabs" role="tablist">
+                    {tabs.map(t => (
+                        <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`pf-tab ${tab === t.id ? 'active' : ''}`}
+                            onClick={() => { setTab(t.id); setView(t.id === 'outfit' || t.id === 'gear' ? 'full' : 'face'); }}>{t.label}</button>
+                    ))}
                 </div>
-            )}
 
-            {/* Achievement Gallery */}
-            <div className="achievement-gallery">
-                <h3>Achievement Gallery</h3>
-                <div className="achievement-grid">
-                    {rewards.allAchievements.map((achievement, index) => (
-                        <div
-                            key={index}
-                            className={`achievement-card ${achievement.unlocked ? 'unlocked' : 'locked'}`}
-                        >
-                            <div className="achievement-icon">
-                                <i data-feather={achievement.icon}></i>
-                            </div>
-                            <div className="achievement-details">
-                                <h4>{achievement.unlocked ? achievement.name : '???'}</h4>
-                                <p>{achievement.unlocked ? achievement.description : 'Keep building to unlock!'}</p>
-                                {achievement.unlocked && (
-                                    <div className="unlock-date">
-                                        <small>Unlocked: {new Date(achievement.unlockedAt).toLocaleDateString()}</small>
-                                    </div>
-                                )}
-                            </div>
+                {tab === 'face' && (
+                    <div>
+                        <PfChoices label="Build" options={['male', 'female', 'other']} value={look.gender} onPick={(v) => set('gender', v)}
+                            names={{ male: 'Broad', female: 'Slim', other: 'Neutral' }} />
+                        <PfSwatches label="Skin" colors={OPT.skinColors} value={look.skinColor} onPick={(v) => set('skinColor', v)} />
+                        <PfSwatches label="Eyes" colors={OPT.eyeColors} value={look.eyeColor} onPick={(v) => set('eyeColor', v)} />
+                        <PfChoices label="Expression" options={OPT.mouths} value={look.mouth} onPick={(v) => set('mouth', v)} />
+                        <PfChoices label="Facial hair" options={OPT.facialHair} value={look.facialHair} onPick={(v) => set('facialHair', v)} />
+                        <PfChoices label="Glasses" options={OPT.glasses} value={look.glasses} onPick={(v) => set('glasses', v)} />
+                    </div>
+                )}
+                {tab === 'hair' && (
+                    <div>
+                        <PfChoices label="Style" options={OPT.hairStyles} value={look.hairStyle} onPick={(v) => set('hairStyle', v)} />
+                        <PfSwatches label="Colour" colors={OPT.hairColors} value={look.hairColor} onPick={(v) => set('hairColor', v)} />
+                    </div>
+                )}
+                {tab === 'outfit' && (
+                    <div>
+                        <PfChoices label="Outfit" options={PF_OUTFITS} value={look.outfit} owned={owned || []} onPick={(v) => set('outfit', v)} />
+                        {look.outfit === 'default' && <PfSwatches label="Overalls colour" colors={OPT.outfitColors} value={look.overallColor} onPick={(v) => set('overallColor', v)} />}
+                        {owned && PF_OUTFITS.some(o => !PF_FREE.includes(o) && !owned.includes(o)) && <p className="pf-note">Locked outfits are sold in the shop.</p>}
+                    </div>
+                )}
+                {tab === 'gear' && (
+                    <div>
+                        <PfChoices label="Hat" options={PF_HATS} value={look.hat} owned={owned || []} onPick={(v) => set('hat', v)} />
+                        {(look.hat === 'hardhat' || look.hat === 'cap') && <PfSwatches label="Hat colour" colors={OPT.hatColors} value={look.hatColor} onPick={(v) => set('hatColor', v)} />}
+                        <PfChoices label="Tool" options={PF_TOOLS} value={look.tool} owned={owned || []} onPick={(v) => set('tool', v)} />
+                    </div>
+                )}
+            </section>
+
+            {/* Houses */}
+            <section className="pf-section">
+                <h3>Houses you have built <span className="pf-count">{houses.length}</span></h3>
+                {houses.length === 0
+                    ? <div className="pf-empty">Finish a focus session to build your first house.</div>
+                    : <div className="pf-chips">{Object.entries(houseCounts).map(([type, n]) => <span className="pf-chip" key={type}>{n} × {type}</span>)}</div>}
+            </section>
+
+            {/* Achievements */}
+            <section className="pf-section">
+                <h3>Achievements <span className="pf-count">{unlockedCount}/{achievements.length}</span></h3>
+                <div className="pf-badges">
+                    {achievements.map((a, i) => (
+                        <div key={a.id || i} className={`pf-badge ${a.unlocked ? 'is-on' : ''}`} title={a.unlocked ? `${a.name}: ${a.description}` : 'Keep building to unlock this'}>
+                            <window.FeatherIcon name={a.unlocked ? (a.icon || 'award') : 'lock'} size={18} gap={0} />
+                            <span>{a.unlocked ? a.name : '???'}</span>
                         </div>
                     ))}
                 </div>
-            </div>
+            </section>
 
-            {/* Village Overview */}
-            <div className="village-overview">
-                <h3>Your Village</h3>
-                <div className="village-stats">
-                    <div className="stat">
-                        <i data-feather="home"></i>
-                        <span>{gameState.completedHouses.length} Houses Built</span>
-                    </div>
-                    <div className="stat">
-                        <i data-feather="users"></i>
-                        <span>{gameState.completedHouses.length * 3} Villagers</span>
-                    </div>
-                    <div className="stat">
-                        <i data-feather="map"></i>
-                        <span>Level {Math.floor(gameState.completedHouses.length / 5) + 1} Village</span>
-                    </div>
+            {/* Statistics + report */}
+            <section className="pf-section">
+                <div className="pf-section-head">
+                    <h3>Focus statistics</h3>
+                    <button type="button" className="pf-btn" onClick={downloadReport}><window.FeatherIcon name="download" size={14} gap={6} /> Download report</button>
                 </div>
-
-                <div className="house-types-built">
-                    <h4>Houses in Your Village:</h4>
-                    <div className="house-type-list">
-                        {Object.entries(
-                            gameState.completedHouses.reduce((acc, house) => {
-                                acc[house.type] = (acc[house.type] || 0) + 1;
-                                return acc;
-                            }, {})
-                        ).map(([type, count]) => (
-                            <div key={type} className="house-type-item">
-                                <i data-feather="home"></i>
-                                <span>{count} {type}{count > 1 ? 's' : ''}</span>
-                            </div>
-                        ))}
-                    </div>
+                {reportError && <div className="pf-error" role="alert">{reportError}</div>}
+                <div className="pf-stats pf-stats--wide">
+                    {stat(pfTime(totalSec), 'Total focus')}
+                    {stat(`${Math.floor((rewards.longestSession || 0) / 60)} min`, 'Longest')}
+                    {stat(`${Math.floor((rewards.averageSession || 0) / 60)} min`, 'Average')}
+                    {stat(`${rewards.successRate}%`, 'Success rate')}
                 </div>
-            </div>
-
-            {/* Focus Statistics */}
-            <div className="focus-statistics">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3>Focus Statistics</h3>
-                    <button
-                        onClick={() => {
-                            alert("Academic Focus Report Generated!\n\nUser: " + (gameState.builderCustomization.name || 'Student') + "\nFaculty: " + gameState.user?.faculty + "\nTotal Focus Time: " + Math.floor(rewards.totalFocusTime / 3600) + "h " + Math.floor((rewards.totalFocusTime % 3600) / 60) + "m\nSuccess Rate: " + rewards.successRate + "%\n\nThis report has been saved to your academic profile.");
-                        }}
-                        style={{
-                            background: '#4CAF50', color: 'white', border: 'none',
-                            padding: '6px 12px', borderRadius: '6px', cursor: 'pointer',
-                            fontSize: '0.85em', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px'
-                        }}
-                    >
-                        <i data-feather="file-text" style={{ width: '14px' }}></i> Generate Report
-                    </button>
-                </div>
-                <div className="stats-grid">
-                    <div className="stat-item">
-                        <label>Total Focus Time</label>
-                        <span>{Math.floor(rewards.totalFocusTime / 3600)}h {Math.floor((rewards.totalFocusTime % 3600) / 60)}m</span>
-                    </div>
-                    <div className="stat-item">
-                        <label>Longest Session</label>
-                        <span>{Math.floor(rewards.longestSession / 60)} minutes</span>
-                    </div>
-                    <div className="stat-item">
-                        <label>Average Session</label>
-                        <span>{Math.floor(rewards.averageSession / 60)} minutes</span>
-                    </div>
-                    <div className="stat-item">
-                        <label>Success Rate</label>
-                        <span>{rewards.successRate}%</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Simple Admin / User Management Panel (Conditional/Demo) */}
-            <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <i data-feather="shield" style={{ color: '#FFD700' }}></i> Admin Management
-                </h3>
-                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '15px' }}>
-                    <p style={{ fontSize: '0.9em', opacity: 0.7 }}>User management and system analytics.</p>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85em', marginTop: '10px' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                <th style={{ textAlign: 'left', padding: '10px' }}>Student</th>
-                                <th style={{ textAlign: 'left', padding: '10px' }}>Faculty</th>
-                                <th style={{ textAlign: 'right', padding: '10px' }}>Hours</th>
-                                <th style={{ textAlign: 'right', padding: '10px' }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style={{ padding: '10px' }}>{gameState.builderCustomization.name || 'You'} (Active)</td>
-                                <td style={{ padding: '10px' }}>{gameState.user?.faculty?.toUpperCase()}</td>
-                                <td style={{ padding: '10px', textAlign: 'right' }}>{(rewards.totalFocusTime / 3600).toFixed(1)}</td>
-                                <td style={{ padding: '10px', textAlign: 'right' }}>
-                                    <button style={{ background: 'none', border: 'none', color: '#4CAF50', cursor: 'pointer' }}>Manage</button>
-                                </td>
-                            </tr>
-                            <tr style={{ opacity: 0.5 }}>
-                                <td style={{ padding: '10px' }}>Musa M.</td>
-                                <td style={{ padding: '10px' }}>NAS</td>
-                                <td style={{ padding: '10px', textAlign: 'right' }}>12.4</td>
-                                <td style={{ padding: '10px', textAlign: 'right' }}>
-                                    <button style={{ background: 'none', border: 'none', color: '#ccc' }}>Manage</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            </section>
         </div>
     );
 };

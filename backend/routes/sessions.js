@@ -4,6 +4,8 @@ const router = express.Router();
 const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
 const { isIntInRange } = require('../middleware/validate');
+const { notifyUser, notifyMany, friendIdsOf, nameOf, broadcastAllowed } = require('../utils/notify');
+const { STREAK_MILESTONE_COINS } = require('../utils/rewardRules');
 
 // ─── POST /api/sessions — Record a completed or interrupted focus session ──────
 const MAX_SESSION_SEC   = 86_400;   // 24 hours
@@ -44,10 +46,26 @@ router.post('/', authenticate, async (req, res) => {
         const user = userRes.rows[0];
 
         let coinsEarned = 0;
+        let streakAfter = user.streak || 0;
+        const streakBefore = user.streak || 0;
+        let boosterUsed = null;                 // 'focus_potion' | 'xp_amplifier' when a booster changed the coins
+        let shieldUsed = false;                 // true when a streak shield saved the streak
+        let milestoneBonus = 0;                 // extra coins for reaching a streak milestone
+
+        // A booster charge is spent only on a completed session. Focus Potion doubles the coins;
+        // otherwise the XP Amplifier adds 50%. Only one applies per session.
+        const chargeOf = async (kind) => {
+            const r = await client.query('SELECT charges FROM user_boosters WHERE user_id = $1 AND kind = $2', [userId, kind]);
+            return r.rows[0] ? r.rows[0].charges : 0;
+        };
+        const spend = (kind) => client.query('UPDATE user_boosters SET charges = charges - 1 WHERE user_id = $1 AND kind = $2 AND charges > 0', [userId, kind]);
+
         if (completed) {
             const baseCoins   = Math.floor(elapsed / 60);
             const streakBonus = Math.min((user.streak || 0) * 5, 50);
             coinsEarned = baseCoins + streakBonus;
+            if (await chargeOf('focus_potion') > 0) { coinsEarned *= 2; boosterUsed = 'focus_potion'; await spend('focus_potion'); }
+            else if (await chargeOf('xp_amplifier') > 0) { coinsEarned = Math.floor(coinsEarned * 1.5); boosterUsed = 'xp_amplifier'; await spend('xp_amplifier'); }
         }
 
         await client.query(`
@@ -59,13 +77,26 @@ router.post('/', authenticate, async (req, res) => {
             const today     = new Date().toISOString().split('T')[0];
             const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0];
 
+            const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
+
             let newStreak = user.streak || 0;
             if (user.last_focus_date === yesterday) {
                 newStreak += 1;         // Continue streak
             } else if (user.last_focus_date !== today) {
-                newStreak = 1;          // Streak broken (or first ever) — start at 1
+                // One missed day: a Streak Shield charge keeps the streak alive (and counts today)
+                if (user.last_focus_date === twoDaysAgo && newStreak > 0 && await chargeOf('streak_shield') > 0) {
+                    newStreak += 1;
+                    shieldUsed = true;
+                    await spend('streak_shield');
+                } else {
+                    newStreak = 1;      // Streak broken (or first ever) — start at 1
+                }
             }
             // else: already focused today — streak unchanged
+            streakAfter = newStreak;
+
+            // Reaching a streak milestone pays a one-off bonus
+            if (newStreak > streakBefore && STREAK_MILESTONE_COINS[newStreak]) milestoneBonus = STREAK_MILESTONE_COINS[newStreak];
 
             // Houses are cumulative across sessions. total_focus_sec was previously
             // never SELECTed, so every session was treated as starting from 0.
@@ -81,15 +112,23 @@ router.post('/', authenticate, async (req, res) => {
                     houses_built    = houses_built + $4,
                     total_focus_sec = total_focus_sec + $5
                 WHERE id = $6
-            `, [coinsEarned, newStreak, today, houseIncrement, elapsed, userId]);
+            `, [coinsEarned + milestoneBonus, newStreak, today, houseIncrement, elapsed, userId]);
         }
 
         await client.query('COMMIT');
 
+        // Tell friends, and celebrate a streak milestone (both are best-effort and never fail the request)
+        if (completed) {
+            await announceFinish(userId, elapsed, streakAfter, streakBefore, milestoneBonus);
+        }
+
         res.status(201).json({
             message: completed ? 'Session completed! Coins awarded.' : 'Session recorded.',
             coinsEarned,
-            completed
+            completed,
+            boosterUsed,
+            shieldUsed,
+            milestoneBonus
         });
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
@@ -97,6 +136,56 @@ router.post('/', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Server error recording session.' });
     } finally {
         client.release();
+    }
+});
+
+
+// ─── Notifications around sessions ────────────────────────────────────────────
+const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
+const fmtMinutes = (sec) => {
+    const m = Math.round(sec / 60);
+    return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${Math.max(1, m)} min`;
+};
+
+// A friend finished a session, and the student may have hit a streak milestone
+async function announceFinish(userId, elapsed, streakAfter, streakBefore, milestoneBonus) {
+    try {
+        if (streakAfter > streakBefore && STREAK_MILESTONES.includes(streakAfter)) {
+            await notifyUser(userId, { category: 'achievements', kind: 'streak', title: `${streakAfter}-day streak`, body: milestoneBonus ? `+${milestoneBonus} bonus coins. Keep it going.` : 'Keep it going. Study again tomorrow.', link: 'rewards', push: false });
+        }
+        if (broadcastAllowed(userId, 'finished')) {
+            const friends = await friendIdsOf(userId);
+            await notifyMany(friends, {
+                category: 'friends', kind: 'friend_finished', title: `${await nameOf(userId)} finished a ${fmtMinutes(elapsed)} session`,
+                body: 'Nice work. Your turn?', link: 'community:friends'
+            }, userId);
+        }
+    } catch (err) {
+        console.warn('Could not announce a finished session:', err.message);
+    }
+}
+
+// ─── POST /api/sessions/start - "a friend started a session" ──────────────────
+// Called by the app the moment a focus session begins. Nothing is stored; friends are told once
+// per student per 10 minutes so a run of short sessions cannot flood them.
+router.post('/start', authenticate, async (req, res) => {
+    const { duration } = req.body || {};
+    if (!isIntInRange(duration, 1, MAX_SESSION_SEC)) {
+        return res.status(400).json({ error: 'duration must be a whole number of seconds between 1 and 86400.' });
+    }
+    try {
+        let notified = 0;
+        if (broadcastAllowed(req.user.id, 'started')) {
+            const friends = await friendIdsOf(req.user.id);
+            notified = await notifyMany(friends, {
+                category: 'friends', kind: 'friend_started', title: `${await nameOf(req.user.id)} started a ${fmtMinutes(duration)} session`,
+                body: 'Join them and study together.', link: 'community:friends'
+            }, req.user.id);
+        }
+        res.json({ ok: true, notified });
+    } catch (err) {
+        console.error('Session start notice error:', err);
+        res.status(500).json({ error: 'Server error announcing the session.' });
     }
 });
 

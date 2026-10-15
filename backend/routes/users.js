@@ -139,4 +139,84 @@ router.get('/stats', authenticate, async (req, res) => {
     }
 });
 
+// ─── Character appearance ─────────────────────────────────────────────────────
+// The student's builder (face, hair, outfit, hat, tool) is saved here so it follows them to
+// any device. Every field is checked against a fixed list, and shop items are only accepted
+// if the student actually owns them.
+const HEX = /^#[0-9a-fA-F]{6}$/;
+const AVATAR_FIELDS = {
+    gender:        { oneOf: ['male', 'female', 'other'] },
+    skinColor:     { hex: true },
+    hairColor:     { hex: true },
+    eyeColor:      { hex: true },
+    overallColor:  { hex: true },
+    hatColor:      { hex: true },
+    hairStyle:     { oneOf: ['short', 'spiky', 'long', 'ponytail', 'bun', 'afro', 'curly', 'buzz', 'bald'] },
+    mouth:         { oneOf: ['smile', 'grin', 'neutral', 'smirk'] },
+    facialHair:    { oneOf: ['none', 'stubble', 'moustache', 'beard'] },
+    glasses:       { oneOf: ['none', 'round', 'square'] },
+    outfit:        { oneOf: ['default', 'outfit_architect', 'outfit_wizard', 'outfit_ninja', 'outfit_knight', 'outfit_astronaut'], shop: true },
+    hat:           { oneOf: ['hardhat', 'cap', 'none', 'hat_tophat', 'hat_crown', 'hat_beret', 'hat_beanie', 'hat_helmet'], shop: true },
+    tool:          { oneOf: ['hammer', 'none', 'tool_wrench', 'tool_paintbrush', 'tool_drill', 'tool_wand'], shop: true }
+};
+const FREE_ITEMS = ['default', 'hardhat', 'cap', 'none', 'hammer'];
+
+async function ownedItemIds(userId) {
+    const r = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId]);
+    return r.rows.map(x => x.item_id);
+}
+
+// GET /api/users/avatar - the saved look (null if the student never customised) and what they own
+router.get('/avatar', authenticate, async (req, res) => {
+    try {
+        const r = await pool.query('SELECT data FROM user_avatars WHERE user_id = $1', [req.user.id]);
+        let avatar = null;
+        if (r.rows[0]) {
+            try { avatar = JSON.parse(r.rows[0].data); } catch (e) { avatar = null; }   // a damaged row is treated as "not saved"
+        }
+        res.json({ avatar, owned: await ownedItemIds(req.user.id) });
+    } catch (err) {
+        console.error('Avatar load error:', err);
+        res.status(500).json({ error: 'Server error loading your character.' });
+    }
+});
+
+// PUT /api/users/avatar - save some or all fields; unknown fields and bad values are rejected
+router.put('/avatar', authenticate, async (req, res) => {
+    try {
+        const body = req.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length === 0) {
+            return res.status(400).json({ error: 'Send the character fields you want to change.' });
+        }
+        const owned = await ownedItemIds(req.user.id);
+        const clean = {};
+        for (const [key, value] of Object.entries(body)) {
+            const rule = AVATAR_FIELDS[key];
+            if (!rule) return res.status(400).json({ error: `Unknown character field "${key}".` });
+            if (rule.hex && !(typeof value === 'string' && HEX.test(value))) {
+                return res.status(400).json({ error: `${key} must be a colour like #aabbcc.` });
+            }
+            if (rule.oneOf && !rule.oneOf.includes(value)) {
+                return res.status(400).json({ error: `${key} must be one of: ${rule.oneOf.join(', ')}.` });
+            }
+            if (rule.shop && !FREE_ITEMS.includes(value) && !owned.includes(value)) {
+                return res.status(403).json({ error: 'You can only use shop items you have bought.' });
+            }
+            clean[key] = value;
+        }
+        const existing = await pool.query('SELECT data FROM user_avatars WHERE user_id = $1', [req.user.id]);
+        let merged = {};
+        if (existing.rows[0]) { try { merged = JSON.parse(existing.rows[0].data) || {}; } catch (e) { merged = {}; } }
+        merged = { ...merged, ...clean };
+        await pool.query(`
+            INSERT INTO user_avatars (user_id, data, updated_at) VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
+        `, [req.user.id, JSON.stringify(merged), new Date().toISOString()]);
+        res.json({ avatar: merged });
+    } catch (err) {
+        console.error('Avatar save error:', err);
+        res.status(500).json({ error: 'Server error saving your character.' });
+    }
+});
+
 module.exports = router;

@@ -35,14 +35,13 @@ describe('Study logo is a single shared component', () => {
         assert.equal(copies, 1, `found ${copies} copies of the logo artwork`);
     });
 
-    test('FAB, Study AI nav tab and Study panel header all render <StudyLogo>', () => {
+    test('FAB and Study panel header render <StudyLogo>, and the nav bar has no Study AI tab', () => {
         const fab = panel.slice(panel.indexOf('study-panel-fab'), panel.indexOf('</button>', panel.indexOf('study-panel-fab')));
         assert.match(fab, /<StudyLogo/, 'FAB does not use StudyLogo');
         assert.match(panel.slice(panel.indexOf('study-header')), /<StudyLogo/, 'panel header does not use StudyLogo');
-        const navTab = (app.match(/<button[^]*?nav-tab-study[^]*?<\/button>/) || [''])[0];
-        assert.ok(navTab.includes('Study AI'), 'could not find the Study AI nav tab');
-        assert.match(navTab, /<StudyLogo/, 'Study AI nav tab still uses a different icon');
-        assert.ok(!/🧠 Study AI/.test(app), 'nav tab still shows the 🧠 emoji instead of the logo');
+        // Study AI opens from the floating house button only; the tab was removed on purpose
+        assert.ok(!/nav-tab-study/.test(app), 'the Study AI nav tab is back');
+        assert.ok(!/>\s*Study AI\s*<\/button>/.test(app), 'a Study AI button is back in the nav bar');
     });
 });
 

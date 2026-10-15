@@ -11,6 +11,7 @@ const { pool } = require('../database');
 const AppError = require('../utils/AppError');
 const { authenticate } = require('../middleware/auth');
 const { parseId, isIntInRange } = require('../middleware/validate');
+const { notifyUser, notifyMany, friendIdsOf, nameOf } = require('../utils/notify');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O/1/I to avoid misreading
 const CODE_LENGTH = 8;
@@ -168,9 +169,13 @@ router.post('/friends/request', async (req, res) => {
         if (rel.requester_id === me) throw new AppError('You already sent this student a request.', 409);
         // They already asked you: asking back means yes
         await pool.query("UPDATE friendships SET status = 'accepted' WHERE id = $1", [rel.id]);
+        const myName = await nameOf(me);
+        await notifyUser(them, { category: 'friends', kind: 'friend_accepted', title: `${myName} is now your friend`, body: 'You can study together.', link: 'community:friends' });
         return res.json({ status: 'accepted', message: 'You are now friends.' });
     }
     await pool.query('INSERT INTO friendships (requester_id, addressee_id) VALUES ($1, $2)', [me, them]);
+    const requesterName = await nameOf(me);
+    await notifyUser(them, { category: 'friends', kind: 'friend_request', title: `${requesterName} sent you a friend request`, body: 'Open Community to accept it.', link: 'community:friends' });
     res.status(201).json({ status: 'pending', message: 'Friend request sent.' });
 });
 
@@ -180,6 +185,7 @@ router.post('/friends/:id/accept', async (req, res) => {
     const rel = await relationBetween(req.user.id, other);
     if (!rel || rel.status !== 'pending' || rel.addressee_id !== req.user.id) throw new AppError('No pending request from that student.', 404);
     await pool.query("UPDATE friendships SET status = 'accepted' WHERE id = $1", [rel.id]);
+    await notifyUser(other, { category: 'friends', kind: 'friend_accepted', title: `${await nameOf(req.user.id)} accepted your friend request`, body: 'You can study together now.', link: 'community:friends' });
     res.json({ status: 'accepted' });
 });
 
@@ -267,7 +273,12 @@ router.post('/groups/join', async (req, res) => {
     const mine = await pool.query('SELECT COUNT(*) AS n FROM group_members WHERE user_id = $1', [req.user.id]);
     if (parseInt(mine.rows[0].n, 10) >= MAX_GROUPS_PER_USER) throw new AppError(`You can be in at most ${MAX_GROUPS_PER_USER} groups.`, 400);
     await pool.query("INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, 'member')", [id, req.user.id]);
-    res.status(201).json({ group: groupRow(await myGroup(id, req.user.id)), alreadyMember: false });
+    const joined = groupRow(await myGroup(id, req.user.id));
+    const ownerRow = await pool.query('SELECT owner_id FROM study_groups WHERE id = $1', [id]);
+    if (ownerRow.rows[0]) {
+        await notifyUser(ownerRow.rows[0].owner_id, { category: 'groups', kind: 'group_joined', title: `${await nameOf(req.user.id)} joined ${joined.name}`, body: `${joined.memberCount} members now.`, link: 'community:groups' });
+    }
+    res.status(201).json({ group: joined, alreadyMember: false });
 });
 
 router.post('/groups/:id/leave', async (req, res) => {
@@ -354,6 +365,9 @@ async function joinRoom(room, userId) {
     if (already) return { alreadyMember: true };
     if (parseInt(room.member_count, 10) >= MAX_ROOM_MEMBERS) throw new AppError('This study room is full.', 409);
     await pool.query("INSERT INTO room_members (room_id, user_id, status) VALUES ($1, $2, 'joined')", [room.id, userId]);
+    if (room.host_id !== userId) {
+        await notifyUser(room.host_id, { category: 'rooms', kind: 'room_joined', title: `${await nameOf(userId)} joined your study room`, body: room.title, link: 'community:rooms' });
+    }
     return { alreadyMember: false };
 }
 
@@ -377,7 +391,15 @@ router.post('/rooms', async (req, res) => {
         return r.rows[0].id;
     });
     await pool.query("INSERT INTO room_members (room_id, user_id, status) VALUES ($1, $2, 'joined')", [id, req.user.id]);
-    res.status(201).json({ room: roomRow(await loadRoom(id), { myStatus: 'joined' }) });
+    // Tell friends (and the linked group's members) a room is open
+    const created = roomRow(await loadRoom(id), { myStatus: 'joined' });
+    let audience = await friendIdsOf(req.user.id);
+    if (gid) audience = audience.concat((await pool.query('SELECT user_id FROM group_members WHERE group_id = $1', [gid])).rows.map(x => x.user_id));
+    await notifyMany(audience, {
+        category: 'rooms', kind: 'room_created', title: `${created.hostName} opened a study room`,
+        body: `${created.title} · ${created.durationMin} min. Join in.`, link: 'community:rooms'
+    }, req.user.id);
+    res.status(201).json({ room: created });
 });
 
 router.post('/rooms/join', async (req, res) => {
@@ -459,6 +481,14 @@ router.post('/rooms/:id/status', async (req, res) => {
     if (!ROOM_MOVES[mem.status].includes(status)) throw new AppError(`You cannot go from "${mem.status}" to "${status}".`, 409);
     await pool.query('UPDATE room_members SET status = $1, updated_at = $2 WHERE room_id = $3 AND user_id = $4',
         [status, new Date().toISOString(), id, req.user.id]);
+    // Tell the rest of the room when someone starts or finishes
+    const verbs = { focusing: 'started focusing', completed: 'finished their session' };
+    if (verbs[status]) {
+        const others = (await pool.query('SELECT user_id FROM room_members WHERE room_id = $1', [id])).rows.map(x => x.user_id);
+        await notifyMany(others, {
+            category: 'rooms', kind: `room_${status}`, title: `${await nameOf(req.user.id)} ${verbs[status]}`, body: room.title, link: 'community:rooms'
+        }, req.user.id);
+    }
     res.json({ status });
 });
 

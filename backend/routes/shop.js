@@ -3,18 +3,22 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
+const { notifyUser } = require('../utils/notify');
+const { BOOSTERS } = require('../utils/rewardRules');
 
 // ─── GET /api/shop — List all shop items (with ownership flag) ─────────────────
 router.get('/', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [itemsRes, ownedRes] = await Promise.all([
+        const [itemsRes, ownedRes, boostRes] = await Promise.all([
             pool.query('SELECT * FROM shop_items ORDER BY category, price'),
-            pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId])
+            pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId]),
+            pool.query('SELECT kind, charges FROM user_boosters WHERE user_id = $1', [userId])
         ]);
 
         const owned = new Set(ownedRes.rows.map(r => r.item_id));
+        const charges = new Map(boostRes.rows.map(r => [r.kind, r.charges]));
 
         // Group by category
         const grouped = {};
@@ -28,7 +32,9 @@ router.get('/', authenticate, async (req, res) => {
                 price:       item.price,
                 emoji:       item.emoji,
                 isPremium:   item.is_premium === 1,
-                owned:       owned.has(item.item_id)
+                // Boosters are consumables: they can be bought again, so they are never "owned"
+                owned:       item.category === 'booster' ? false : owned.has(item.item_id),
+                charges:     BOOSTERS[item.item_id] ? (charges.get(BOOSTERS[item.item_id].kind) || 0) : undefined
             });
         }
 
@@ -64,7 +70,8 @@ router.post('/buy', authenticate, async (req, res) => {
         // and drive the balance negative.
         await client.query('BEGIN');
 
-        const alreadyRes = await client.query(
+        const booster = BOOSTERS[itemId];       // boosters are consumables, everything else is bought once
+        const alreadyRes = booster ? { rows: [] } : await client.query(
             'SELECT id FROM user_items WHERE user_id = $1 AND item_id = $2', [userId, itemId]);
         if (alreadyRes.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -83,8 +90,17 @@ router.post('/buy', authenticate, async (req, res) => {
             return res.status(402).json({ error: `Not enough coins. You have ${coins} but this costs ${item.price}.` });
         }
 
-        await client.query('INSERT INTO user_items (user_id, item_id) VALUES ($1, $2)', [userId, itemId]);
+        if (booster) {
+            // Add charges to the student's stock of this booster
+            await client.query(`
+                INSERT INTO user_boosters (user_id, kind, charges) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, kind) DO UPDATE SET charges = user_boosters.charges + EXCLUDED.charges
+            `, [userId, booster.kind, booster.charges]);
+        } else {
+            await client.query('INSERT INTO user_items (user_id, item_id) VALUES ($1, $2)', [userId, itemId]);
+        }
         await client.query('COMMIT');
+        await notifyUser(userId, { category: 'system', kind: 'purchase', title: `Purchased ${item.name}`, body: `${debit.rows[0].coins} coins left.`, link: 'shop', push: false });
 
         res.status(201).json({
             message:        `You purchased "${item.name}"! Enjoy your new item.`,

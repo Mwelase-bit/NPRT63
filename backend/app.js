@@ -17,6 +17,8 @@ const achievementRoutes = require('./routes/achievements');
 const aiRoutes          = require('./routes/ai');
 const analyticsRoutes   = require('./routes/analytics');
 const socialRoutes      = require('./routes/social');
+const notificationRoutes = require('./routes/notifications');
+const rewardRoutes      = require('./routes/rewards');
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
 const { sanitiseBody, generalLimiter } = require('./middleware/validate');
@@ -47,6 +49,12 @@ const ROOT = path.join(__dirname, '..');
 app.use('/src',    express.static(path.join(ROOT, 'src')));
 app.use('/vendor', express.static(path.join(ROOT, 'vendor')));
 app.get(['/', '/index.html'], (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+// Web Push service worker. It has to live at the root (scope "/") and must never be cached
+// for long, or a fixed worker would not reach students.
+app.get('/sw.js', (req, res) => {
+    res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+    res.sendFile(path.join(ROOT, 'sw.js'), (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
@@ -58,6 +66,8 @@ app.use('/api/achievements', achievementRoutes);
 app.use('/api/ai',           aiRoutes);
 app.use('/api/analytics',    analyticsRoutes);
 app.use('/api/social',       socialRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/rewards',      rewardRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

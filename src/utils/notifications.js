@@ -17,15 +17,23 @@ const NotificationManager = (() => {
         return permission === 'granted';
     };
 
+    // Show a notification for the student's own events (session complete, streaks...).
+    // Permission is read live from the browser, since the student can grant it at any time from
+    // the bell menu. Phones only allow notifications through a service worker, so use that when
+    // it is registered and fall back to the plain Notification object on desktop.
     const send = (title, options = {}) => {
-        if (permission !== 'granted') return null;
         try {
-            const notif = new Notification(title, {
-                icon: 'vendor/icon.svg',
-                badge: 'vendor/icon.svg',
-                ...options,
-            });
-            // Auto-close after 6 seconds
+            if (!('Notification' in window) || Notification.permission !== 'granted') return null;
+            const opts = { icon: '/vendor/icon.svg', badge: '/vendor/icon.svg', ...options };
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration('/').then((reg) => {
+                    if (reg) return reg.showNotification(title, opts);
+                    const notif = new Notification(title, opts);
+                    setTimeout(() => notif.close(), 6000);       // auto-close after 6 seconds
+                }).catch((e) => console.warn('Notification failed:', e));
+                return true;
+            }
+            const notif = new Notification(title, opts);
             setTimeout(() => notif.close(), 6000);
             return notif;
         } catch (e) {
