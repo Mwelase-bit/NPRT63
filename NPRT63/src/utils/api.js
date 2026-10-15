@@ -58,7 +58,11 @@ const api = {
         changePassword: (data) =>
             api._fetch('/users/password', { method: 'PUT', body: JSON.stringify(data) }),
 
-        getStats: () => api._fetch('/users/stats')
+        getStats: () => api._fetch('/users/stats'),
+
+        // The saved character look, and which shop items the student owns
+        getAvatar: () => api._fetch('/users/avatar'),
+        saveAvatar: (fields) => api._fetch('/users/avatar', { method: 'PUT', body: JSON.stringify(fields) })
     },
 
     // ── Sessions ───────────────────────────────────────────────────────────────
@@ -72,6 +76,10 @@ const api = {
          */
         create: (data) =>
             api._fetch('/sessions', { method: 'POST', body: JSON.stringify(data) }),
+
+        // Tells friends a session has begun (best effort; the app never waits on it)
+        start: (duration) =>
+            api._fetch('/sessions/start', { method: 'POST', body: JSON.stringify({ duration }) }),
 
         getHistory: (limit = 20, offset = 0) =>
             api._fetch(`/sessions?limit=${limit}&offset=${offset}`),
@@ -96,6 +104,25 @@ const api = {
         getOwned: () => api._fetch('/shop/owned'),
         buy: (itemId) =>
             api._fetch('/shop/buy', { method: 'POST', body: JSON.stringify({ itemId }) })
+    },
+
+    // ── Rewards: bonuses are checked and paid by the server ─────────────────────
+    rewards: {
+        status: () => api._fetch('/rewards/status'),
+        claim: (kind) => api._fetch('/rewards/claim', { method: 'POST', body: JSON.stringify({ kind }) })
+    },
+
+    // ── Notifications: list, switches and Web Push subscriptions ───────────────
+    notifications: {
+        list: () => api._fetch('/notifications'),
+        markRead: (ids) => api._fetch('/notifications/read', { method: 'POST', body: JSON.stringify({ ids }) }),
+        markAllRead: () => api._fetch('/notifications/read', { method: 'POST', body: JSON.stringify({ all: true }) }),
+        clear: () => api._fetch('/notifications', { method: 'DELETE' }),
+        prefs: () => api._fetch('/notifications/prefs'),
+        setPref: (category, enabled) => api._fetch('/notifications/prefs', { method: 'PUT', body: JSON.stringify({ category, enabled }) }),
+        pushKey: () => api._fetch('/notifications/push/key'),
+        subscribe: (subscription) => api._fetch('/notifications/push/subscribe', { method: 'POST', body: JSON.stringify(subscription) }),
+        unsubscribe: (endpoint) => api._fetch('/notifications/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) })
     },
 
     // ── Social: friends, class groups, shared study rooms ─────────────────────

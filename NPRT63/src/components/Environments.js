@@ -670,7 +670,14 @@
         F.createSiteProps(grp, hw + 0.5, hd + 0.5);
 
         // hammering builder who climbs the scaffold with progress
-        const hammerer = F.createCharacter({ shirt: 0xd35400, hat: 0xffffff, vest: 0xFFD21A, skin: 0xC68642, hair: 0x1a1a1a, hammer: true });
+        // The builder hammering on site is the student's own character (falls back to the stock builder)
+        let hammerer;
+        try {
+            hammerer = (window.BuilderAppearance && window.AvatarFactory)
+                ? window.AvatarFactory.createAvatar(window.BuilderAppearance, { hammer: true })
+                : null;
+        } catch (err) { console.warn('Could not build the player character for the site:', err); }
+        if (!hammerer) hammerer = F.createCharacter({ shirt: 0xd35400, hat: 0xffffff, vest: 0xFFD21A, skin: 0xC68642, hair: 0x1a1a1a, hammer: true });
         grp.add(hammerer);
         // a second worker carrying a plank along the front
         const carrier = F.createCharacter({ shirt: 0x16a085, hat: 0xFF7A1A, vest: 0xFF7A1A, skin: 0xF1C27D, hair: 0x5a3b1d });

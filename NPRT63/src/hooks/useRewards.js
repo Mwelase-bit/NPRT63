@@ -322,52 +322,8 @@ const useRewards = (gameState, timer) => {
         }
     }, [timer.isActive]);
 
-    const claimDailyLogin = () => {
-        if (!rewards.dailyStats.dailyLoginClaimed) {
-            setRewards(prev => ({
-                ...prev,
-                coins: prev.coins + 50,
-                dailyStats: {
-                    ...prev.dailyStats,
-                    dailyLoginClaimed: true,
-                    coinsToday: prev.dailyStats.coinsToday + 50
-                }
-            }));
-            return true;
-        }
-        return false;
-    };
-
-    const claimDailyProgress = () => {
-        if (!rewards.dailyStats.dailyProgressClaimed && (rewards.dailyStats.sessionsToday >= 5 || rewards.dailyStats.timeToday >= 7200)) {
-            setRewards(prev => ({
-                ...prev,
-                coins: prev.coins + 200,
-                dailyStats: {
-                    ...prev.dailyStats,
-                    dailyProgressClaimed: true,
-                    coinsToday: prev.dailyStats.coinsToday + 200
-                }
-            }));
-            return true;
-        }
-        return false;
-    };
-
-    const claimWeeklyChallenge = () => {
-        if (!rewards.weeklyStats.weeklyChallengeClaimed && rewards.weeklyStats.sessionsThisWeek >= 20) {
-            setRewards(prev => ({
-                ...prev,
-                coins: prev.coins + 500,
-                weeklyStats: {
-                    ...prev.weeklyStats,
-                    weeklyChallengeClaimed: true
-                }
-            }));
-            return true;
-        }
-        return false;
-    };
+    // Daily check-in, daily goal and weekly challenge are claimed through the server
+    // (api.rewards.claim), so coins can never appear here and then vanish on the next sync.
 
     return {
         ...rewards,
@@ -376,9 +332,6 @@ const useRewards = (gameState, timer) => {
         updateStreak,
         recordSession,
         checkAchievements,
-        claimDailyLogin,
-        claimDailyProgress,
-        claimWeeklyChallenge,
         syncWithBackend
     };
 };

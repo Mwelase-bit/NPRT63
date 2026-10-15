@@ -20,6 +20,10 @@ const useGameState = () => {
             hatColor: '#FFD700',
             hairColor: '#8B4513',
             hairStyle: 'short',
+            eyeColor: '#4b2e1b',
+            mouth: 'smile',
+            facialHair: 'none',
+            glasses: 'none',
             outfit: 'default',
             hat: 'hardhat',
             tool: 'hammer'
@@ -188,6 +192,12 @@ const useGameState = () => {
         }));
     };
 
+    // Apply several look fields at once (used when the saved look is loaded from the server)
+    const mergeBuilderCustomization = (fields) => {
+        if (!fields || typeof fields !== 'object') return;
+        setGameState(prev => ({ ...prev, builderCustomization: { ...prev.builderCustomization, ...fields } }));
+    };
+
     const addPurchasedItem = (category, itemId) => {
         setGameState(prev => ({
             ...prev,
@@ -315,6 +325,7 @@ const useGameState = () => {
         triggerDemolition,
         resetBuilding,
         updateBuilderCustomization,
+        mergeBuilderCustomization,
         addPurchasedItem,
         unlockHouseType,
         setFaculty,

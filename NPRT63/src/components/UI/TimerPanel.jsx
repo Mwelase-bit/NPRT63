@@ -1,5 +1,5 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const TimerPanel = ({ timer, onStartSession, gameState, roomTitle }) => {
+const TimerPanel = ({ timer, onStartSession, onEndSession, gameState, roomTitle }) => {
     const [hours, setHours] = useState('0');
     const [mins, setMins] = useState('25');
     const toInt = (v) => Math.max(0, parseInt(v, 10) || 0);
@@ -53,8 +53,9 @@ const TimerPanel = ({ timer, onStartSession, gameState, roomTitle }) => {
                     <button
                         className="tp-btn tp-btn--ghost"
                         onClick={() => {
-                            timer.stop();
-                            gameState.resetBuilding();
+                            // The app records the early end; without it (older callers) just stop
+                            if (onEndSession) onEndSession();
+                            else { timer.stop(); gameState.resetBuilding(); }
                         }}
                     >
                         End session

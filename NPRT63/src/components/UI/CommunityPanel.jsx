@@ -1,248 +1,198 @@
+// CommunityPanel.jsx - everything social in one place:
+//   Leaderboard : campus stats plus Global, My Faculty and Campus rankings
+//   Friends     : friend code / QR / link, requests, friends ranked by focus time
+//   Groups      : class groups with a weekly leaderboard, joined by code, link or QR
+//   Study rooms : shared sessions where everyone sees who is focusing
+// The last three are provided by SocialPanel, embedded here without its own card.
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const CommunityPanel = ({ gameState, rewards, faculty }) => {
-    const [activeTab, setActiveTab] = useState('global');
+
+const CommunityPanel = ({ gameState, rewards, faculty, onStartRoom, activeRoomId, initialView, onViewConsumed }) => {
+    // Which part of Community is showing, and which leaderboard inside it
+    const [section, setSection] = useState('leaderboard');
+    const [board, setBoard] = useState('global');
+    const [badges, setBadges] = useState({ friends: 0, rooms: 0 });
+
+    // Campus-wide numbers and the global ranking
     const [globalStats, setGlobalStats] = useState({ totalMembers: 0, totalHours: 0, totalHouses: 0, averageStreak: 0 });
     const [globalLeaderboard, setGlobalLeaderboard] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
-    // Trigger feather icons
+    // Load the campus numbers. Failures are shown to the student (with a retry), never swallowed silently.
+    const loadCommunityData = useCallback(async () => {
+        if (!gameState?.token) { setLoading(false); return; }
+        setLoading(true);
+        setLoadError('');
+        try {
+            const [summaryRes, globalRes] = await Promise.all([
+                window.api.leaderboard.getSummary(),
+                window.api.leaderboard.getGlobal()
+            ]);
+            setGlobalStats(summaryRes);
+            setGlobalLeaderboard(Array.isArray(globalRes.leaderboard) ? globalRes.leaderboard : []);
+            if (faculty && faculty.refreshLeaderboards) faculty.refreshLeaderboards();
+        } catch (err) {
+            console.error('Failed to load community data', err);
+            setLoadError(err.message || 'Could not load the leaderboards.');
+        } finally {
+            setLoading(false);
+        }
+    }, [gameState?.token]);
+
+    useEffect(() => { loadCommunityData(); }, [loadCommunityData]);
+
+    // An invite link or QR scan lands on the right section
     useEffect(() => {
-        setTimeout(() => { if (window.feather) feather.replace(); }, 50);
-    });
+        if (initialView && initialView.tab) setSection(initialView.tab);
+    }, [initialView]);
 
-    useEffect(() => {
-        const loadCommunityData = async () => {
-            try {
-                if (!gameState?.token) return;
-                setLoading(true);
-                const [summaryRes, globalRes] = await Promise.all([
-                    window.api.leaderboard.getSummary(),
-                    window.api.leaderboard.getGlobal()
-                ]);
-                setGlobalStats(summaryRes);
-                setGlobalLeaderboard(globalRes.leaderboard);
-                
-                // Refresh local faculty and interfaculty data as well
-                if (faculty?.refreshLeaderboards) {
-                    faculty.refreshLeaderboards();
-                }
-            } catch (err) {
-                console.error("Failed to load community data", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadCommunityData();
-    }, [gameState?.token, activeTab]);
+    const SU = window.SocialUI || {};
+    const Avatar = SU.SoAvatar || (() => null);
 
-    const getStreakColor = (streak) => {
-        if (streak >= 30) return "#FF6B35";
-        if (streak >= 15) return "#4CAF50";
-        if (streak >= 7) return "#2196F3";
-        return "#9E9E9E";
-    };
+    const rankLabel = (i) => i + 1;
+    const streakText = (n) => (n > 0 ? `${n}-day streak` : 'No streak');
 
-    const getRankEmoji = (index) => index < 3
-        ? <window.FeatherIcon name="award" size={20} gap={0} color={['#FFD700', '#C0C0C0', '#CD7F32'][index]} />
-        : `#${index + 1}`;
+    const sections = [
+        { id: 'leaderboard', label: 'Leaderboard' },
+        { id: 'friends', label: 'Friends', badge: badges.friends },
+        { id: 'groups', label: 'Groups' },
+        { id: 'rooms', label: 'Study rooms', badge: badges.rooms }
+    ];
+    const boards = [
+        { id: 'global', label: 'Global' },
+        { id: 'faculty', label: 'My faculty' },
+        { id: 'interfaculty', label: 'Campus' }
+    ];
 
-    const tabs = [
-        { id: 'global', label: 'Global', icon: 'globe' },
-        { id: 'faculty', label: 'My Faculty', icon: 'users' },
-        { id: 'interfaculty', label: 'Campus', icon: 'award' }
+    // One ranked row, shared by every leaderboard
+    const Row = ({ i, name, sub, value, unit, me, tail }) => (
+        <div className={`so-row ${me ? 'is-me' : ''}`}>
+            <span className="so-rank">{rankLabel(i)}</span>
+            <Avatar name={name} />
+            <div className="so-row-main">
+                <div className="so-name">{name}{me ? ' (you)' : ''}</div>
+                <div className="so-meta">{sub}</div>
+            </div>
+            {tail}
+            <div className="so-stat"><strong>{value}</strong><span>{unit}</span></div>
+        </div>
+    );
+
+    const stats = [
+        { value: globalStats.totalMembers, label: 'Students' },
+        { value: `${globalStats.totalHours} hrs`, label: 'Studied' },
+        { value: globalStats.totalHouses, label: 'Houses built' },
+        { value: globalStats.averageStreak, label: 'Avg. streak' }
     ];
 
     return (
-        <div className="community-panel">
+        <div className="community-panel co-panel">
             <h2>Community</h2>
 
-            {/* Community Stats */}
-            <div className="community-stats">
-                {[
-                    { icon: 'users', value: globalStats.totalMembers, label: 'Total Members' },
-                    { icon: 'clock', value: `${globalStats.totalHours} hrs`, label: 'Total Study Time' },
-                    { icon: 'home', value: globalStats.totalHouses, label: 'Houses Built' },
-                    { icon: 'zap', value: globalStats.averageStreak, label: 'Avg. Streak' }
-                ].map((s, i) => (
-                    <div key={i} className="stat-card">
-                        <div className="stat-icon"><i data-feather={s.icon}></i></div>
-                        <div className="stat-info"><h3>{s.value}</h3><p>{s.label}</p></div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Tab Navigation */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0' }}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        style={{
-                            padding: '10px 16px',
-                            background: 'none',
-                            border: 'none',
-                            borderBottom: activeTab === tab.id ? '2px solid #4CAF50' : '2px solid transparent',
-                            color: activeTab === tab.id ? '#4CAF50' : 'rgba(255,255,255,0.6)',
-                            cursor: 'pointer',
-                            fontWeight: activeTab === tab.id ? 600 : 400,
-                            fontSize: '0.9em',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        <i data-feather={tab.icon} style={{ width: '14px', height: '14px' }}></i>
-                        {tab.label}
+            <div className="co-tabs" role="tablist">
+                {sections.map(s => (
+                    <button key={s.id} type="button" role="tab" aria-selected={section === s.id}
+                        className={`co-tab ${section === s.id ? 'active' : ''}`} onClick={() => setSection(s.id)}>
+                        {s.label}{s.badge > 0 && <span className="so-badge">{s.badge}</span>}
                     </button>
                 ))}
             </div>
 
-            {/* ── GLOBAL TAB ── */}
-            {activeTab === 'global' && (
-                <div className="friends-section">
-                    <div className="friends-list">
-                        {loading ? <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading Global Players...</p> : globalLeaderboard.slice(0, 10).map((player, index) => (
-                            <div key={player.id} className="friend-card" style={player.isCurrentUser ? { borderColor: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)' } : {}}>
-                                <div className="friend-avatar">
-                                    <span className="avatar-emoji"><window.FeatherIcon name="user" size={22} gap={0} /></span>
-                                    <div className="level-badge" style={{ backgroundColor: '#CD7F32' }}>{player.rank}</div>
-                                </div>
-                                <div className="friend-info">
-                                    <div className="friend-header">
-                                        <h4>{player.name} {player.isCurrentUser && " (You)"}</h4>
-                                        <span className="status online">{player.facultyName}</span>
-                                    </div>
-                                    <div className="friend-stats">
-                                        <div className="stat-item"><i data-feather="clock"></i><span>Focus: {player.totalHours} hrs</span></div>
-                                        <div className="stat-item"><i data-feather="home"></i><span>Houses: {player.housesBuilt}</span></div>
-                                        <div className="stat-item">
-                                            <i data-feather="zap"></i>
-                                            <span className="streak" style={{ color: getStreakColor(player.streak) }}>{player.streak} day streak</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+            {section === 'leaderboard' && (
+                <div>
+                    <div className="co-stats">
+                        {stats.map(s => (
+                            <div key={s.label} className="co-stat"><strong>{loading ? '–' : s.value}</strong><span>{s.label}</span></div>
                         ))}
                     </div>
 
-                    {/* Top 5 Leaderboard */}
-                    <div className="leaderboard" style={{ marginTop: '24px' }}>
-                        <h3>Global Top 5</h3>
-                        <div className="leaderboard-list">
-                            {loading ? null : globalLeaderboard.slice(0, 5).map((player, index) => (
-                                <div key={player.id} className="leaderboard-item" style={player.isCurrentUser ? { borderColor: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)' } : {}}>
-                                    <div className="rank">{getRankEmoji(index)}</div>
-                                    <div className="player-info">
-                                        <span className="player-name">{player.name} {player.isCurrentUser && "(You)"}</span>
-                                    </div>
-                                    <div className="player-score"><span>{player.totalHours} hrs</span></div>
-                                </div>
-                            ))}
+                    {loadError && (
+                        <div className="so-error" role="alert">
+                            {loadError} <button type="button" className="so-btn" style={{ marginLeft: 8 }} onClick={loadCommunityData}>Try again</button>
                         </div>
+                    )}
+
+                    <div className="so-chips co-boards" role="group" aria-label="Leaderboard">
+                        {boards.map(b => (
+                            <button key={b.id} type="button" className={`so-chip ${board === b.id ? 'is-on' : ''}`} onClick={() => setBoard(b.id)}>{b.label}</button>
+                        ))}
                     </div>
-                </div>
-            )}
 
-            {/* ── FACULTY TAB ── */}
-            {activeTab === 'faculty' && (
-                <div className="faculty-section">
-                    {!gameState.faculty ? (
-                        <div style={{ textAlign: 'center', padding: '40px 20px', opacity: 0.6 }}>
-                            <i data-feather="users" style={{ width: '48px', height: '48px', marginBottom: '16px' }}></i>
-                            <p>You haven't joined a faculty yet. Update your profile to join a faculty and compete locally!</p>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="faculty-header" style={{
-                                background: `linear-gradient(135deg, ${faculty?.userFacultyInfo?.color || '#2c3e50'}, #1a252f)`,
-                                padding: '20px', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '20px'
-                            }}>
-                                <div style={{ fontSize: '48px', background: 'rgba(0,0,0,0.2)', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <window.FeatherIcon name="book-open" size={36} gap={0} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: '0 0 8px 0', fontSize: '1.4em' }}>{faculty?.userFacultyInfo?.name || gameState.faculty}</h3>
-                                    <div style={{ display: 'flex', gap: '16px', fontSize: '0.9em', opacity: 0.9 }}>
-                                        <span><i data-feather="users" style={{ width: '14px', height: '14px', verticalAlign: 'middle', marginRight: '4px' }}></i>
-                                            {faculty?.facultyLeaderboard?.length || 0} Members</span>
-                                    </div>
-                                </div>
-                            </div>
+                    {board === 'global' && (
+                        <section className="so-section">
+                            <h3>Top students on campus</h3>
+                            {loading && <div className="so-empty">Loading rankings…</div>}
+                            {!loading && !loadError && globalLeaderboard.length === 0 && <div className="so-empty-card">No sessions have been finished yet. Be the first on the board.</div>}
+                            {!loading && globalLeaderboard.slice(0, 10).map((p, i) => (
+                                <Row key={p.id} i={i} name={p.name} me={p.isCurrentUser}
+                                    sub={`${p.facultyName || ''} · ${streakText(p.streak)} · ${p.housesBuilt} houses`}
+                                    value={`${p.totalHours} hrs`} unit="focused" />
+                            ))}
+                        </section>
+                    )}
 
-                            <div className="leaderboard">
-                                <h3>Faculty Top Contributors</h3>
-                                <div className="leaderboard-list">
-                                    {faculty?.loading ? (
-                                        <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading faculty data...</p>
-                                    ) : faculty?.facultyLeaderboard && faculty.facultyLeaderboard.length > 0 ? (
-                                        faculty.facultyLeaderboard.map((member, index) => (
-                                            <div key={member.id} className={`leaderboard-item ${member.isCurrentUser ? 'current-user' : ''}`}>
-                                                <div className="rank">{getRankEmoji(index)}</div>
-                                                <div className="player-info">
-                                                    <span className="player-name">
-                                                        {member.name} {member.isCurrentUser && '(You)'}
-                                                    </span>
-                                                </div>
-                                                <div className="player-score">
-                                                    <span>{member.weeklyHours} hrs</span>
-                                                    <span style={{ fontSize: '0.8em', opacity: 0.7, marginLeft: '8px' }}>
-                                                        <i data-feather="zap" style={{ width: '10px', height: '10px' }}></i> {member.streak}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p style={{ textAlign: 'center', opacity: 0.6 }}>No data yet for this faculty.</p>
+                    {board === 'faculty' && (
+                        <section className="so-section">
+                            {!gameState.faculty ? (
+                                <div className="so-empty-card">You have not chosen a faculty yet.</div>
+                            ) : (
+                                <>
+                                    <h3>{(faculty && faculty.userFacultyInfo && faculty.userFacultyInfo.name) || gameState.faculty}
+                                        <span className="so-count">{(faculty && faculty.facultyLeaderboard && faculty.facultyLeaderboard.length) || 0} members</span></h3>
+                                    {faculty && faculty.loading && <div className="so-empty">Loading your faculty…</div>}
+                                    {faculty && !faculty.loading && (!faculty.facultyLeaderboard || faculty.facultyLeaderboard.length === 0) && (
+                                        <div className="so-empty-card">No sessions finished in your faculty this week.</div>
                                     )}
-                                </div>
-                            </div>
-                        </>
+                                    {faculty && !faculty.loading && (faculty.facultyLeaderboard || []).map((m, i) => (
+                                        <Row key={m.id} i={i} name={m.name} me={m.isCurrentUser}
+                                            sub={streakText(m.streak)} value={`${m.weeklyHours} hrs`} unit="this week" />
+                                    ))}
+                                </>
+                            )}
+                        </section>
+                    )}
+
+                    {board === 'interfaculty' && (
+                        <section className="so-section">
+                            <h3>Faculty vs faculty, this week</h3>
+                            {faculty && faculty.loading && <div className="so-empty">Loading campus rankings…</div>}
+                            {faculty && !faculty.loading && (!faculty.interfacultyRankings || faculty.interfacultyRankings.length === 0) && (
+                                <div className="so-empty-card">No campus data yet.</div>
+                            )}
+                            {faculty && !faculty.loading && (faculty.interfacultyRankings || []).map((f, i, all) => {
+                                const top = Math.max(1, ...all.map(x => x.totalHours || 0));
+                                const mine = f.faculty === gameState.faculty;
+                                return (
+                                    <div key={f.faculty} className={`so-row co-faculty ${mine ? 'is-me' : ''}`}>
+                                        <span className="so-rank">{rankLabel(i)}</span>
+                                        <div className="so-row-main">
+                                            <div className="so-name">{f.name}{mine ? ' (your faculty)' : ''}</div>
+                                            <div className="co-bar"><span style={{ width: `${Math.round(((f.totalHours || 0) / top) * 100)}%`, background: f.color || '#60a5fa' }} /></div>
+                                            <div className="so-meta">{f.studentCount} active students</div>
+                                        </div>
+                                        <div className="so-stat"><strong>{f.totalHours} hrs</strong><span>focused</span></div>
+                                    </div>
+                                );
+                            })}
+                        </section>
                     )}
                 </div>
             )}
 
-            {/* ── INTERFACULTY TAB ── */}
-            {activeTab === 'interfaculty' && (
-                <div className="interfaculty-section">
-                    <p style={{ marginBottom: '20px', opacity: 0.8, lineHeight: 1.5 }}>
-                        See which faculty on campus is logging the most focus time this week. Represent your faculty and climb the ranks!
-                    </p>
-
-                    <div className="leaderboard">
-                        <div className="leaderboard-list interfaculty-list">
-                            {faculty?.loading ? (
-                                <p style={{ textAlign: 'center', opacity: 0.6 }}>Loading campus rankings...</p>
-                            ) : faculty?.interfacultyRankings && faculty.interfacultyRankings.length > 0 ? (
-                                faculty.interfacultyRankings.map((fac, index) => {
-                                    const isUserFaculty = fac.faculty === gameState.faculty;
-                                    return (
-                                        <div key={fac.faculty} className={`leaderboard-item ${isUserFaculty ? 'current-user' : ''}`} style={{ padding: '16px' }}>
-                                            <div className="rank" style={{ fontSize: '1.4em', width: '40px' }}>{getRankEmoji(index)}</div>
-
-                                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                <div style={{ fontSize: '24px', background: 'rgba(255,255,255,0.1)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <window.FeatherIcon name={fac.icon || 'users'} size={24} gap={0} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontWeight: 'bold', fontSize: '1.1em', color: fac.color }}>
-                                                        {fac.name} {isUserFaculty && ' (Your Faculty)'}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.85em', opacity: 0.7, marginTop: '4px' }}>
-                                                        {fac.studentCount} active students
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="player-score" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                <span style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#4CAF50' }}>{fac.totalHours} hrs</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <p style={{ textAlign: 'center', opacity: 0.6 }}>No interfaculty data available.</p>
-                            )}
-                        </div>
-                    </div>
+            {/* Always mounted (hidden on the leaderboard) so the "friend requests" and "rooms to join"
+                badges stay up to date and invite links work from any tab */}
+            {window.SocialPanel && (
+                <div hidden={section === 'leaderboard'}>
+                    <window.SocialPanel
+                        embedded
+                        section={section === 'leaderboard' ? 'friends' : section}
+                        gameState={gameState}
+                        onStartRoom={onStartRoom}
+                        activeRoomId={activeRoomId}
+                        initialView={initialView}
+                        onViewConsumed={onViewConsumed}
+                        onBadges={setBadges}
+                    />
                 </div>
             )}
         </div>

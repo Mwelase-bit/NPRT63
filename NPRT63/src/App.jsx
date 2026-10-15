@@ -13,6 +13,7 @@ const ShopPanel = window.ShopPanel;
 const AnalyticsPanel = window.AnalyticsPanel;
 const SocialPanel = window.SocialPanel;
 const InviteDialog = window.InviteDialog;
+const NotificationBell = window.NotificationBell;
 const GameScene = window.GameScene;
 const RegistrationModal = window.RegistrationModal;
 const StudyPanel = window.StudyPanel;
@@ -47,15 +48,109 @@ const App = () => {
     // so the nav tab and the floating button always agree.
     const [studyOpen, setStudyOpen] = useState(false);
 
+    // Open the screen a notification (or a tapped push message) points to.
+    // Links look like "community:friends", "community:rooms", "rewards", "profile" or "shop".
+    const openLink = useCallback((link) => {
+        try {
+            if (!link) return;
+            const [panel, tab] = String(link).split(':');
+            if (panel === 'community') {
+                setSocialView({ tab: ['friends', 'groups', 'rooms'].includes(tab) ? tab : 'friends' });
+                setActivePanel('community');
+            } else if (['timer', 'rewards', 'profile', 'shop', 'insights'].includes(panel)) {
+                setActivePanel(panel);
+            }
+            setMobileMenuOpen(false);
+        } catch (err) {
+            console.warn('Could not open notification link:', err);
+        }
+    }, []);
+
+    // A push tapped while the app was closed starts it as /?open=LINK
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const open = params.get('open');
+            if (open) {
+                sessionStorage.setItem('bh_pending_open', open);
+                params.delete('open');
+                const qs = params.toString();
+                window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+            }
+        } catch (e) { /* storage or history unavailable */ }
+    }, []);
+    useEffect(() => {
+        if (!gameState.token || gameState.authRestoring) return;
+        try {
+            const pending = sessionStorage.getItem('bh_pending_open');
+            if (pending) { sessionStorage.removeItem('bh_pending_open'); openLink(pending); }
+        } catch (e) { /* ignore */ }
+    }, [gameState.token, gameState.authRestoring]);
+
+    // Phone menu housekeeping: Escape closes it, and it resets if the window grows to desktop width
+    useEffect(() => {
+        if (!mobileMenuOpen) return;
+        const onKey = (e) => { if (e.key === 'Escape') setMobileMenuOpen(false); };
+        const onResize = () => { if (window.innerWidth > 768) setMobileMenuOpen(false); };
+        window.addEventListener('keydown', onKey);
+        window.addEventListener('resize', onResize);
+        return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
+    }, [mobileMenuOpen]);
+
     // All automated interruption detection has been removed.
     // The focus session ends only when:
  // 1. The timer naturally completes
  // 2. The user clicks "Stop Session"
 
-    // Request notification permission after login/registration
+    // ── Saved character ────────────────────────────────────────────────────────
+    // The look (face, hair, outfit, hat, tool) is stored on the server so it follows the student
+    // to any device. It is loaded once after sign-in; after that every change is saved a moment
+    // later. Saving only starts once the load has finished, so the defaults can never overwrite
+    // a look that is waiting on the server.
+    const LOOK_KEYS = ['gender', 'skinColor', 'hairColor', 'eyeColor', 'overallColor', 'hatColor', 'hairStyle', 'mouth', 'facialHair', 'glasses', 'outfit', 'hat', 'tool'];
+    const avatarReadyRef = React.useRef(false);
+    const lastSavedLookRef = React.useRef('');
+    const pickLook = (c) => LOOK_KEYS.reduce((o, k) => (c && c[k] !== undefined ? { ...o, [k]: c[k] } : o), {});
+    const announceSync = (state) => window.dispatchEvent(new CustomEvent('bh-avatar-sync', { detail: state }));
+
+    useEffect(() => {
+        if (!gameState.token || gameState.authRestoring) return;
+        avatarReadyRef.current = false;
+        window.api.users.getAvatar()
+            .then(res => {
+                if (res.avatar) gameState.mergeBuilderCustomization(res.avatar);
+                lastSavedLookRef.current = JSON.stringify(res.avatar ? { ...pickLook(gameState.builderCustomization), ...res.avatar } : pickLook(gameState.builderCustomization));
+            })
+            .catch(err => console.warn('Could not load the saved character (using this device\'s copy):', err.message))
+            .finally(() => { avatarReadyRef.current = true; });
+    }, [gameState.token, gameState.authRestoring]);
+
+    const lookNow = JSON.stringify(pickLook(gameState.builderCustomization));
+    useEffect(() => {
+        window.BuilderAppearance = pickLook(gameState.builderCustomization);        // read by the 3D scene for the builder on site
+        if (!gameState.token || !avatarReadyRef.current || lookNow === lastSavedLookRef.current) return;
+        const timer = setTimeout(async () => {
+            try {
+                announceSync('saving');
+                await window.api.users.saveAvatar(JSON.parse(lookNow));
+                lastSavedLookRef.current = lookNow;
+                announceSync('saved');
+            } catch (err) {
+                console.warn('Could not save the character:', err.message);
+                announceSync('error');
+                if (err.status === 403) {
+                    // A shop item the server does not know we own: take the server's version back
+                    window.api.users.getAvatar().then(res => { if (res.avatar) gameState.mergeBuilderCustomization(res.avatar); }).catch(() => { });
+                }
+            }
+        }, 900);
+        return () => clearTimeout(timer);
+    }, [lookNow, gameState.token]);
+
+    // Streak reminders. The browser's permission prompt is not shown automatically any more:
+    // students switch notifications on from the bell menu (a prompt out of nowhere gets blocked).
     useEffect(() => {
         if (gameState.token && window.NotificationManager) {
-            window.NotificationManager.requestPermission();
             // Start streak reminder scheduler
             window.NotificationManager.startStreakReminder(
                 () => rewards.lastFocusDate,
@@ -294,6 +389,8 @@ const App = () => {
 
         // Record when session started (for elapsed-time tracking)
         sessionStartRef.current = Date.now();
+        // Friends hear that a session began; failures are ignored on purpose
+        if (gameState.token) window.api.sessions.start(duration).catch(() => { });
         demolishedRef.current = false;
 
         // Pick the building size from the session length, then reset
@@ -334,6 +431,24 @@ const App = () => {
         }
         wasActiveRef.current = timer.isActive;
     }, [timer.isActive, timer.isCompleted]);
+
+    // The student pressed "End session" before the timer finished. That counts as an interrupted
+    // session (recorded, no coins, no house), just like a collapse: ending early is not a free escape.
+    const endSession = () => {
+        try {
+            if (timer.isActive && !demolishedRef.current && sessionStartRef.current) {
+                demolishedRef.current = true;                       // so the same session is never recorded twice
+                const elapsed = Math.max(0, Math.min(timer.duration, timer.duration - timer.timeLeft));
+                syncSessionToBackend(timer.duration, elapsed, false);
+            }
+        } catch (err) {
+            console.warn('Could not record the ended session:', err);
+        } finally {
+            sessionStartRef.current = null;
+            timer.stop();
+            gameState.resetBuilding();
+        }
+    };
 
     // POST a finished or interrupted session to the backend
     const syncSessionToBackend = async (duration, elapsed, completed) => {
@@ -398,27 +513,29 @@ const App = () => {
                 <InviteDialog
                     code={inviteCode}
                     onClose={() => setInviteCode(null)}
-                    onDone={(v) => { setInviteCode(null); setSocialView(v); setActivePanel('social'); }}
+                    onDone={(v) => { setInviteCode(null); setSocialView(v); setActivePanel('community'); }}
                 />
             )}
+
+            {!gameState.authRestoring && gameState.token && <NotificationBell gameState={gameState} onNavigate={openLink} />}
 
             {/* Leaving the app mid-session: return window / welcome back / collapse notice */}
             {leaveBanner && leaveBanner.phase === 'away' && (
                 <div className="leave-banner leave-banner--warn" role="alert">
-                    <strong>Come back to your session</strong>
-                    <span>Your building collapses in {Math.max(0, Math.ceil((leaveBanner.deadline - (leaveClock || Date.now())) / 1000))}s. The timer is paused.</span>
+                    <strong>Come back</strong>
+                    <span>Your building collapses in {Math.max(0, Math.ceil((leaveBanner.deadline - (leaveClock || Date.now())) / 1000))}s. Timer paused.</span>
                 </div>
             )}
             {leaveBanner && leaveBanner.phase === 'back' && (
                 <div className="leave-banner leave-banner--ok" role="status">
                     <strong>Welcome back</strong>
-                    <span>You were away {Math.round(leaveBanner.awayMs / 1000)}s. The timer was paused, so nothing was lost.</span>
+                    <span>Away for {Math.round(leaveBanner.awayMs / 1000)}s. Nothing was lost.</span>
                 </div>
             )}
             {collapseNotice && (
                 <div className="leave-banner leave-banner--bad" role="alert">
-                    <strong>Your building collapsed</strong>
-                    <span>You left the app for more than {Math.round(window.LeaveGuard.GRACE_MS / 1000)} seconds. Stay on the page to keep building.</span>
+                    <strong>Building collapsed</strong>
+                    <span>You were away for more than {Math.round(window.LeaveGuard.GRACE_MS / 1000)} seconds.</span>
                 </div>
             )}
 
@@ -454,14 +571,22 @@ const App = () => {
             {/* UI Overlay */}
             {!timer.isActive ? (
                 <div className="ui-overlay">
+                    {/* Phone menu: the button opens the tab list; tapping outside, Escape or choosing a tab closes it */}
                     <button
+                        type="button"
                         className="mobile-menu-toggle"
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                        aria-expanded={mobileMenuOpen}
+                        aria-controls="main-nav"
+                        onClick={() => setMobileMenuOpen(open => !open)}
                     >
-                        <i data-feather="menu"></i>
+                        <window.FeatherIcon name={mobileMenuOpen ? 'x' : 'menu'} size={22} gap={0} />
                     </button>
+                    {mobileMenuOpen && (
+                        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+                    )}
 
-                    <div className={`nav-tabs ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+                    <div id="main-nav" className={`nav-tabs ${mobileMenuOpen ? 'mobile-open' : ''}`}>
                         <button
                             className={`nav-tab ${activePanel === 'timer' ? 'active' : ''}`}
                             onClick={() => {
@@ -503,16 +628,6 @@ const App = () => {
                             Community
                         </button>
                         <button
-                            className={`nav-tab ${activePanel === 'social' ? 'active' : ''}`}
-                            onClick={() => {
-                                setActivePanel('social');
-                                setMobileMenuOpen(false);
-                            }}
-                        >
-                            <i data-feather="user-plus"></i>
-                            Friends
-                        </button>
-                        <button
                             className={`nav-tab ${activePanel === 'shop' ? 'active' : ''}`}
                             onClick={() => {
                                 setActivePanel('shop');
@@ -532,18 +647,6 @@ const App = () => {
                             <i data-feather="bar-chart-2"></i>
                             Insights
                         </button>
-                        <button
-                            className={`nav-tab nav-tab-study ${studyOpen ? 'active' : ''}`}
-                            onClick={() => {
-                                // Study AI lives in the floating panel — the tab just toggles it
-                                setStudyOpen(o => !o);
-                                setMobileMenuOpen(false);
-                            }}
-                            aria-pressed={studyOpen}
-                        >
-                            <StudyLogo size={18} className="nav-tab-logo" />
-                            Study AI
-                        </button>
                     </div>
 
                     <div className="panel-content">
@@ -551,13 +654,14 @@ const App = () => {
                             <TimerPanel
                                 timer={timer}
                                 onStartSession={startFocusSession}
+                                onEndSession={endSession}
                                 gameState={gameState}
                                 roomTitle={activeRoom ? activeRoom.title : null}
                             />
                         )}
 
                         {activePanel === 'rewards' && (
-                            <RewardPanel rewards={rewards} />
+                            <RewardPanel rewards={rewards} gameState={gameState} />
                         )}
 
                         {activePanel === 'profile' && (
@@ -572,12 +676,6 @@ const App = () => {
                                 gameState={gameState}
                                 rewards={rewards}
                                 faculty={faculty}
-                            />
-                        )}
-
-                        {activePanel === 'social' && (
-                            <SocialPanel
-                                gameState={gameState}
                                 onStartRoom={startRoomSession}
                                 activeRoomId={activeRoom ? activeRoom.id : null}
                                 initialView={socialView}
@@ -616,6 +714,7 @@ const App = () => {
                     <TimerPanel
                         timer={timer}
                         onStartSession={startFocusSession}
+                        onEndSession={endSession}
                         gameState={gameState}
                         roomTitle={activeRoom ? activeRoom.title : null}
                     />
@@ -657,15 +756,6 @@ const App = () => {
             </div>
             */}
 
-            {/* Mobile Menu Overlay - TEMPORARILY COMMENTED OUT */}
-            {/*
-            {mobileMenuOpen && (
-                <div 
-                    className="mobile-menu-overlay"
-                    onClick={() => setMobileMenuOpen(false)}
-                />
-            )}
-            */}
         </div>
     );
 };

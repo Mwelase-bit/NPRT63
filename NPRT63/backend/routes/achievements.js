@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticate } = require('../middleware/auth');
+const { notifyUser } = require('../utils/notify');
 
 // ─── GET /api/achievements — All achievements earned by the current user ────────
 router.get('/', authenticate, async (req, res) => {
@@ -44,6 +45,8 @@ router.post('/unlock', authenticate, async (req, res) => {
         if (result.rowCount === 0) {
             return res.json({ message: 'Achievement already unlocked.', alreadyUnlocked: true });
         }
+
+        await notifyUser(userId, { category: 'achievements', kind: 'achievement', title: 'Achievement unlocked', body: achievementId.replace(/[_-]+/g, ' '), link: 'profile', push: false });
 
         res.status(201).json({
             message: 'Achievement unlocked!',
