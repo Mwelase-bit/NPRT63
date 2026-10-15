@@ -12,7 +12,7 @@
         { id: 'townhouse',  max: 35,       name: 'Townhouse',    label: 'Medium', view: { scale: 1.45,  lookY: 4.0, h: 1.25 } },
         { id: 'villa',      max: 50,       name: 'Modern Villa', label: 'Medium', view: { scale: 1.55,  lookY: 3.0 } },
         { id: 'mansion',    max: 70,       name: 'Mansion',      label: 'Large',  view: { scale: 1.75, lookY: 3.5 } },
-        { id: 'lighthouse', max: 90,       name: 'Lighthouse',   label: 'Large',  view: { scale: 1.6,  lookY: 5.5 } },
+        { id: 'chalet',     max: 90,       name: 'Alpine Chalet', label: 'Large', view: { scale: 1.6,  lookY: 4.0, h: 1.05 } },
         { id: 'castle',     max: 120,      name: 'Castle',       label: 'Grand',  view: { scale: 1.85, lookY: 4.5 } },
         { id: 'skyscraper', max: Infinity, name: 'Skyscraper',   label: 'Epic',   view: { scale: 2.0, lookY: 6.5, h: 1.7 } }
     ];
@@ -382,48 +382,97 @@
         lampPost(g, -3.2, 4.3, 4); lampPost(g, 3.2, 4.3, 4);
     }
 
-    // ── 6. Lighthouse ────────────────────────────────────────────────────
-    function lighthouse(g) {
-        // rocky island
-        for (let i = 0; i < 9; i++) {
-            const a = (i / 9) * Math.PI * 2;
-            const r = new T.Mesh(new T.DodecahedronGeometry(1.0 + (i % 3) * 0.35, 0), mat(0x7b7b78, { rough: 1 }));
-            r.position.set(Math.cos(a) * 2.7, 0.35, Math.sin(a) * 2.7);
-            r.rotation.set(a, a * 2, 0);
-            r.scale.y = 0.6;
-            r.castShadow = r.receiveShadow = true;
-            r.userData.buildPhase = 1;
-            g.add(r);
-        }
-        cyl(g, 2.6, 2.9, 0.7, 14, 0, 0.35, 0, 1, mat(0x8c8c88, { map: 'stone', rx: 4, ry: 1 }));
-        // striped tapered tower
-        const bands = 6, bh = 1.55;
-        for (let i = 0; i < bands; i++) {
-            const r0 = 1.5 - i * 0.12, r1 = 1.5 - (i + 1) * 0.12;
-            cyl(g, r1, r0, bh, 20, 0, 0.7 + bh / 2 + i * bh, 0, 2, mat(i % 2 ? 0xC0392B : 0xF5F5F0, { rough: 0.6 }));
-        }
-        const top = 0.7 + bands * bh;
-        cyl(g, 1.35, 1.0, 0.25, 20, 0, top + 0.12, 0, 3, mat(0x2b2b2b, { metal: 0.5 }));  // gallery
-        cyl(g, 1.38, 1.38, 0.08, 20, 0, top + 0.28, 0, 3, mat(0x2b2b2b, { metal: 0.5 }));
-        for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * Math.PI * 2;
-            cyl(g, 0.03, 0.03, 0.55, 4, Math.cos(a) * 1.3, top + 0.55, Math.sin(a) * 1.3, 3, mat(0x2b2b2b, { metal: 0.6 }));
-        }
-        cyl(g, 0.65, 0.65, 0.9, 16, 0, top + 0.75, 0, 4, mat(0xFFF1A8, { rough: 0.1, emissive: 0xffd24a, ei: 1.0 })); // lantern
-        cyl(g, 0.0, 0.85, 0.75, 16, 0, top + 1.6, 0, 3, mat(0xC0392B));
-        add(g, new T.SphereGeometry(0.12, 8, 8), mat(0x2b2b2b, { metal: 0.6 }), 0, top + 2.05, 0, 3);
-        // door + windows
-        doorAt(g, 0, 0.7, 1.45, 0.9, 1.5, 0x3b2a1a, 0, 4);
-        [2, 4, 5.6].forEach((y, i) => windowAt(g, 0, y, 1.5 - i * 0.14, 0.45, 0.7, 0, 4));
-        // keeper's cottage
-        wall(g, 2.8, 1.8, 2.4, 3.9, 1.3, 1.6, 2, 0xF4EFE2, 'siding');
-        gable(g, 2.8, 1.0, 2.4, 0.3, 3.9, 2.2, 1.6, 0x8c3a2e, 3, Math.PI / 2);
-        doorAt(g, 3.9, 0.4, 2.85, 0.8, 1.4, 0x3b6e8f, 0, 4);
-        windowAt(g, 5.32, 1.5, 1.6, 0.7, 0.7, Math.PI / 2, 4);
-        // dock and boat
-        box(g, 3.2, 0.12, 1.0, -3.6, 0.45, 2.6, 4, mat(0x8a5a30, { map: 'plank' }));
-        const boat = box(g, 1.5, 0.4, 0.6, -5.0, 0.3, 3.8, 4, mat(0xF4EFE2));
-        boat.rotation.y = 0.5;
+    // ── 6. Alpine chalet ─────────────────────────────────────────────────
+    // Steep snow-covered A-frame roof, glazed gable, balcony, stone chimney.
+    function snowPine(g, x, z, s, phase) {
+        cyl(g, 0.13 * s, 0.19 * s, 0.9 * s, 6, x, 0.45 * s, z, phase, mat(0x5b3d26));
+        [0, 1, 2, 3].forEach(i => {
+            const r = (1.15 - i * 0.24) * s, h = 1.0 * s, y = (1.0 + i * 0.7) * s;
+            add(g, new T.ConeGeometry(r, h, 8), mat(0x24683a, { rough: 0.95 }), x, y, z, phase);
+            add(g, new T.ConeGeometry(r * 0.78, h * 0.55, 8), mat(0xf6f9fc, { rough: 1 }), x, y + h * 0.2, z, phase);
+        });
+    }
+
+    // Pitched roof built from two slabs so the front stays open to show the glazed gable.
+    // Ridge runs along Z; `span` is the width across X, `len` the depth along Z.
+    function chaletRoof(g, span, h, len, over, y, color, phase) {
+        const half = span / 2 + over;
+        const ang = Math.atan2(h, half);
+        const L = Math.hypot(half, h) + 0.2;
+        const W = len + over * 2;
+        const ny = Math.cos(ang), nx = Math.sin(ang);
+        [-1, 1].forEach(s => {
+            const cx = s * half / 2, cy = y + h / 2;
+            const slab = box(g, L, 0.22, W, cx, cy, 0, phase, mat(color, { map: 'shingle', rx: 4, ry: 3 }));
+            slab.rotation.z = -s * ang;
+            // snow blanket, set back from the eaves so the dark roof edge shows
+            const snow = box(g, L - 0.5, 0.2, W - 0.35, cx + s * nx * 0.2, cy + ny * 0.2, 0, phase, mat(0xf7fafc, { rough: 1 }));
+            snow.rotation.z = -s * ang;
+            // bargeboards along the front and back edges
+            [-1, 1].forEach(e => {
+                const bb = box(g, L + 0.05, 0.3, 0.12, cx, cy - 0.03, e * (W / 2), phase, mat(0x4a2f1c));
+                bb.rotation.z = -s * ang;
+            });
+        });
+        box(g, 0.5, 0.18, W + 0.05, 0, y + h + 0.12, 0, phase, mat(0xf7fafc, { rough: 1 }));   // snowy ridge
+    }
+
+    function chalet(g) {
+        const timber = 0x9a6032, darkTimber = 0x4a2f1c, shutter = 0x7d2b2b;
+        base(g, 7.2, 5.2, 0.3, 0x707377);
+        // stone ground floor + log band + timber upper floor
+        wall(g, 6.4, 2.0, 4.4, 0, 1.3, 0, 2, 0x8f8b84, 'stone');
+        box(g, 6.6, 0.2, 4.6, 0, 2.4, 0, 2, mat(darkTimber, { map: 'plank', rx: 4, ry: 1 }));
+        wall(g, 6.0, 2.4, 4.0, 0, 3.7, 0, 2, timber, 'plank');
+        [[-3.0, 2.0], [3.0, 2.0], [-3.0, -2.0], [3.0, -2.0]].forEach(p => box(g, 0.28, 2.5, 0.28, p[0], 3.7, p[1], 2, mat(darkTimber)));
+
+        // glazed A-frame gable on the front (triangle between the upper wall and the roof)
+        const top = 4.9, ridge = 7.8;
+        const tri = new T.Shape();
+        tri.moveTo(-3.0, top); tri.lineTo(3.0, top); tri.lineTo(3.0, top + 0.7); tri.lineTo(0, ridge - 0.1); tri.lineTo(-3.0, top + 0.7); tri.closePath();
+        const triGeo = new T.ExtrudeGeometry(tri, { depth: 0.22, bevelEnabled: false });
+        add(g, triGeo, mat(timber, { map: 'plank', rx: 3, ry: 2 }), 0, 0, 1.9, 3);
+        const glass = new T.Shape();
+        glass.moveTo(-2.2, top + 0.2); glass.lineTo(2.2, top + 0.2); glass.lineTo(2.2, top + 0.85); glass.lineTo(0, ridge - 0.65); glass.lineTo(-2.2, top + 0.85); glass.closePath();
+        add(g, new T.ExtrudeGeometry(glass, { depth: 0.12, bevelEnabled: false }),
+            mat(0x8cc8f2, { rough: 0.05, metal: 0.45, emissive: 0xffb347, ei: 0.2 }), 0, 0, 2.08, 4);
+        box(g, 0.1, ridge - top - 0.8, 0.2, 0, (top + ridge) / 2 - 0.15, 2.14, 4, mat(darkTimber));                // mullions
+        box(g, 4.4, 0.1, 0.2, 0, top + 0.95, 2.14, 4, mat(darkTimber));
+        box(g, 3.0, 0.1, 0.2, 0, top + 1.75, 2.14, 4, mat(darkTimber));
+
+        chaletRoof(g, 6.0, ridge - top, 4.0, 1.0, top, 0x3e3a3c, 3);
+
+        // stone chimney with snow cap
+        box(g, 1.0, 7.4, 1.0, 3.6, 3.7, -0.4, 2, mat(0x85817a, { map: 'stone', rx: 1, ry: 6 }));
+        box(g, 1.3, 0.2, 1.3, 3.6, 7.5, -0.4, 3, mat(0xf7fafc, { rough: 1 }));
+        box(g, 0.6, 0.35, 0.6, 3.6, 7.72, -0.4, 3, mat(0x3a3a3a));
+
+        // front door under the balcony + steps
+        doorAt(g, 0, 0.3, 2.22, 1.15, 1.9, 0x4a2c17, 0, 2);
+        steps(g, 1.7, 3, 0, 2.55, 4, 0x9a9a95);
+        [-2.0, 2.0].forEach(x => windowAt(g, x, 1.45, 2.22, 0.9, 0.95, 0, 4, shutter));
+        [-1.0, 1.0].forEach(z => { windowAt(g, 3.22, 1.45, z, 0.9, 0.95, Math.PI / 2, 4); windowAt(g, -3.22, 1.45, z, 0.9, 0.95, -Math.PI / 2, 4, shutter); });
+        [-1.6, 1.6].forEach(x => windowAt(g, x, 3.75, 2.02, 0.85, 1.15, 0, 4, shutter));
+        windowAt(g, -3.02, 3.75, 0, 0.9, 1.15, -Math.PI / 2, 4, shutter);
+
+        // balcony with railing + two support posts
+        box(g, 5.4, 0.16, 1.1, 0, 2.58, 2.55, 4, mat(darkTimber, { map: 'plank', rx: 3, ry: 1 }));
+        [-2.65, 2.65].forEach(x => cyl(g, 0.1, 0.1, 2.5, 6, x, 1.3, 3.05, 4, mat(darkTimber)));
+        for (let i = 0; i < 10; i++) box(g, 0.07, 0.8, 0.07, -2.5 + i * (5.0 / 9), 3.05, 3.05, 4, mat(darkTimber));
+        box(g, 5.4, 0.09, 0.1, 0, 3.47, 3.05, 4, mat(darkTimber));
+        [-1, 1].forEach(s => { box(g, 0.1, 0.09, 1.1, s * 2.7, 3.47, 2.55, 4, mat(darkTimber)); });
+
+        // firewood stack along the left wall, skis by the door, lantern
+        [[4, 0.22], [3, 0.5], [2, 0.78], [1, 1.06]].forEach(([n, y]) => {
+            for (let i = 0; i < n; i++) cyl(g, 0.16, 0.16, 2.0, 8, -3.85 + (i - (n - 1) / 2) * 0.33, y, -0.2, 4, mat(0x8a5a30)).rotation.x = Math.PI / 2;
+        });
+        [0, 1].forEach(i => { const ski = box(g, 0.12, 2.1, 0.03, -1.6 + i * 0.22, 1.1, 2.4, 4, mat(i ? 0xc0392b : 0x2c6fbb)); ski.rotation.z = 0.12; ski.rotation.x = 0.08; });
+        lampPost(g, 1.9, 3.5, 4);
+        snowPine(g, -5.0, -1.6, 1.5, 4);
+        snowPine(g, 5.6, 2.2, 1.25, 4);
+        snowPine(g, -4.4, 3.0, 1.0, 4);
+        add(g, new T.IcosahedronGeometry(0.5, 1), mat(0xf4f8fb, { rough: 1 }), -2.6, 0.2, 3.2, 4);                    // snow drifts
+        add(g, new T.IcosahedronGeometry(0.7, 1), mat(0xf4f8fb, { rough: 1 }), 3.0, 0.25, 3.0, 4);
     }
 
     // ── 7. Castle ────────────────────────────────────────────────────────
@@ -513,7 +562,7 @@
         lampPost(g, -3.6, 0, 4); lampPost(g, 3.6, 0, 4);
     }
 
-    const BUILDERS = { hut: logCabin, cottage, townhouse, villa, mansion, lighthouse, castle, skyscraper };
+    const BUILDERS = { hut: logCabin, cottage, townhouse, villa, mansion, chalet, castle, skyscraper };
 
     function createBuilding(type, group) {
         const fn = BUILDERS[type] || BUILDERS.cottage;
@@ -663,7 +712,7 @@
 
     window.BuildingFactory = {
         TIERS, tierFor, getTier, createBuilding, createCharacter, createWheelbarrow, createSiteProps,
-        helpers: { mat, add, box, cyl, wall, gable, windowAt, doorAt, pineTree, roundTree, palm, bush, lampPost, flowerBed, chimney, shade, makeTexture }
+        helpers: { mat, add, box, cyl, wall, gable, windowAt, doorAt, pineTree, snowPine, roundTree, palm, bush, lampPost, flowerBed, chimney, shade, makeTexture }
     };
     window.BuildingTiers = { TIERS, tierFor, getTier };
 })();

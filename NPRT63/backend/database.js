@@ -122,6 +122,83 @@ async function initDatabase() {
       );
     `);
 
+    // ── Usage analytics ────────────────────────────────────────────────────────
+    // login_events: one row per sign-in (kind 'login') or app open with a saved
+    // session (kind 'visit'). app_usage: seconds the app was open and visible,
+    // summed into one row per user per hour.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS login_events (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind       TEXT    NOT NULL DEFAULT 'login' CHECK(kind IN ('login','visit')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS app_usage (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        hour_start TIMESTAMPTZ NOT NULL,
+        seconds    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, hour_start)
+      );
+      CREATE INDEX IF NOT EXISTS idx_login_events_user_date
+        ON login_events(user_id, created_at);
+    `);
+
+    // ── Social: friends, class groups and shared study rooms ───────────────────
+    // user_codes: each student's shareable friend code. friendships: requests and
+    // accepted friends. study_groups/group_members: class groups joined by invite
+    // code, link or QR. study_rooms/room_members: a shared study session that
+    // friends and group mates join; each member's status updates as they focus.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_codes (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        code    TEXT NOT NULL UNIQUE
+      );
+      CREATE TABLE IF NOT EXISTS friendships (
+        id           SERIAL PRIMARY KEY,
+        requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        addressee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status       TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted')),
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (requester_id, addressee_id)
+      );
+      CREATE TABLE IF NOT EXISTS study_groups (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        invite_code TEXT NOT NULL UNIQUE,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS group_members (
+        group_id  INTEGER NOT NULL REFERENCES study_groups(id) ON DELETE CASCADE,
+        user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role      TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('owner','member')),
+        joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (group_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS study_rooms (
+        id           SERIAL PRIMARY KEY,
+        host_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        group_id     INTEGER REFERENCES study_groups(id) ON DELETE SET NULL,
+        title        TEXT NOT NULL,
+        duration_min INTEGER NOT NULL CHECK(duration_min BETWEEN 5 AND 720),
+        invite_code  TEXT NOT NULL UNIQUE,
+        status       TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at   TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS room_members (
+        room_id    INTEGER NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status     TEXT NOT NULL DEFAULT 'joined' CHECK(status IN ('joined','focusing','completed','interrupted')),
+        joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id);
+      CREATE INDEX IF NOT EXISTS idx_group_members_user   ON group_members(user_id);
+      CREATE INDEX IF NOT EXISTS idx_room_members_user    ON room_members(user_id);
+    `);
+
     // ── Indexes for performance ────────────────────────────────────────────────
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_focus_sessions_user_date

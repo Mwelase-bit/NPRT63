@@ -224,7 +224,7 @@ const useGameState = () => {
         if (houseCount >= 50) return 'skyscraper';
         if (houseCount >= 20) return 'castle';
         if (houseCount >= 10) return 'mansion';
-        if (houseCount >= 5) return 'lighthouse';
+        if (houseCount >= 5) return 'chalet';
         return 'treehouse';
     };
 

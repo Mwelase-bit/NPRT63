@@ -3,17 +3,13 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 // ── StudyLogo ────────────────────────────────────────────────────────────────
-// The sparkle-bubble logo for Study AI. This is the ONLY copy of the artwork:
+// The app icon (house) for Study AI. This is the ONLY copy of the artwork:
 // the floating button, the Study AI nav tab and the panel header all render
 // <StudyLogo size={…} /> so the logo is identical everywhere in the app.
-// Radiant starburst: rounded rays of varying length around a glowing core.
-const STUDY_RAYS = [30, 22, 28, 19, 31, 23, 27, 20, 30, 24, 28, 21].map((len, i) => {
-    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-    return { x1: 32 + Math.cos(a) * 6, y1: 32 + Math.sin(a) * 6, x2: 32 + Math.cos(a) * len, y2: 32 + Math.sin(a) * len };
-});
+// The BUILDHAUS app icon: the house mark from the sign-up screen and favicon.
 const StudyLogo = ({ size = 24, className = '', title }) => (
     <svg
-        viewBox="0 0 64 64"
+        viewBox="0 0 24 24"
         width={size}
         height={size}
         className={`study-logo ${className}`.trim()}
@@ -23,21 +19,15 @@ const StudyLogo = ({ size = 24, className = '', title }) => (
     >
         {title && <title>{title}</title>}
         <defs>
-            <radialGradient id="studyLogoGrad" cx="50%" cy="50%" r="55%">
-                <stop offset="0" stopColor="#ffd8b8" />
-                <stop offset="0.45" stopColor="#ff9a62" />
-                <stop offset="1" stopColor="#d9582b" />
-            </radialGradient>
-            <radialGradient id="studyLogoGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stopColor="#ff9a62" stopOpacity="0.55" />
-                <stop offset="1" stopColor="#ff9a62" stopOpacity="0" />
-            </radialGradient>
+            <linearGradient id="studyLogoGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#86efac" />
+                <stop offset="1" stopColor="#22a559" />
+            </linearGradient>
         </defs>
-        <circle cx="32" cy="32" r="31" fill="url(#studyLogoGlow)" />
-        <g stroke="url(#studyLogoGrad)" strokeWidth="5.2" strokeLinecap="round">
-            {STUDY_RAYS.map((r, i) => <line key={i} {...r} />)}
-        </g>
-        <circle cx="32" cy="32" r="6.5" fill="#fff4ea" />
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#4CAF50" fillOpacity="0.22"
+              stroke="url(#studyLogoGrad)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9 22V12h6v10" fill="url(#studyLogoGrad)" fillOpacity="0.9"
+              stroke="url(#studyLogoGrad)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
 );
 window.StudyLogo = StudyLogo;
@@ -54,6 +44,139 @@ const StudyIcon = ({ name, size = 16 }) => {
             style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}
             dangerouslySetInnerHTML={{ __html: icon.toSvg({ width: size, height: size, 'stroke-width': 2 }) }}
         />
+    );
+};
+
+// ── AddFilesDialog ───────────────────────────────────────────────────────────
+// A pop-up for choosing the study files to feed the AI. The student picks files
+// (PDF, Word, PowerPoint or text), sees what was read from each, and adds the
+// selected ones to the notes box. The native file picker takes focus away from
+// the page, so leave-detection is paused while it is open: choosing files never
+// collapses a running session.
+const AI_NOTES_LIMIT = 8000;
+const fmtBytes = (n) => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
+
+const AddFilesDialog = ({ existingLength = 0, onAdd, onClose }) => {
+    const [items, setItems] = useState([]);       // { id, name, size, status: 'reading'|'ready'|'error', text, error, use }
+    const [dragOver, setDragOver] = useState(false);
+    const inputRef = useRef(null);
+    const releaseRef = useRef(null);
+    const nextId = useRef(1);
+
+    const releaseGuard = useCallback(() => {
+        if (releaseRef.current) { releaseRef.current(); releaseRef.current = null; }
+    }, []);
+    useEffect(() => () => releaseGuard(), [releaseGuard]);
+
+    // Escape closes the pop-up (and only the pop-up)
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, [onClose]);
+
+    const openPicker = () => {
+        // The picker steals window focus; make sure that is not counted as leaving
+        releaseGuard();
+        if (window.LeaveGuard) releaseRef.current = window.LeaveGuard.suspend();
+        const onFocusBack = () => { window.removeEventListener('focus', onFocusBack); setTimeout(releaseGuard, 800); };
+        window.addEventListener('focus', onFocusBack);
+        if (inputRef.current) inputRef.current.click();
+    };
+
+    const readFiles = (fileList) => {
+        const files = Array.from(fileList || []);
+        if (!files.length) return;
+        const fresh = files.slice(0, 8).map(f => ({ id: nextId.current++, name: f.name, size: f.size, status: 'reading', text: '', error: '', use: true, file: f }));
+        setItems(prev => [...prev, ...fresh].slice(0, 12));
+        fresh.forEach(async (it) => {
+            try {
+                const text = await window.FileText.extract(it.file);
+                setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'ready', text, file: null } : x));
+            } catch (err) {
+                setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'error', error: err.message || 'Could not read this file.', use: false, file: null } : x));
+            }
+        });
+    };
+
+    const onPicked = (e) => {
+        readFiles(e.target.files);
+        e.target.value = '';           // the same file can be chosen again later
+        releaseGuard();
+    };
+
+    const chosen = items.filter(i => i.status === 'ready' && i.use);
+    const room = Math.max(0, AI_NOTES_LIMIT - existingLength);
+    const combined = chosen.map(i => `--- ${i.name} ---\n${i.text}`).join('\n\n');
+    const total = combined.length;
+    const willTrim = total > room;
+    const reading = items.some(i => i.status === 'reading');
+
+    const confirm = () => onAdd(willTrim ? combined.slice(0, room) : combined, { trimmed: willTrim, files: chosen.length });
+
+    return ReactDOM.createPortal(
+        <div className="study-dialog-overlay" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="study-dialog" role="dialog" aria-modal="true" aria-label="Add study files">
+                <div className="study-dialog-head">
+                    <div>
+                        <h3>Add study files</h3>
+                        <p>Choose the files you want the AI to learn from. PDF, Word, PowerPoint and text files work.</p>
+                    </div>
+                    <button type="button" className="study-dialog-x" aria-label="Close" onClick={onClose}>&times;</button>
+                </div>
+
+                <div
+                    className={`study-dropzone ${dragOver ? 'is-over' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragOver(false); readFiles(e.dataTransfer.files); }}
+                >
+                    <StudyIcon name="upload" size={22} />
+                    <div>Drag files here, or</div>
+                    <button type="button" className="study-dialog-select" onClick={openPicker}>Select files</button>
+                    <input ref={inputRef} type="file" multiple accept={window.FileText.ACCEPT} hidden
+                           onChange={onPicked} onCancel={releaseGuard} />
+                </div>
+
+                {items.length > 0 && (
+                    <ul className="study-filelist">
+                        {items.map(it => (
+                            <li key={it.id} className={`study-fileitem is-${it.status}`}>
+                                <input type="checkbox" aria-label={`Use ${it.name}`} checked={it.use} disabled={it.status !== 'ready'}
+                                       onChange={(e) => setItems(prev => prev.map(x => x.id === it.id ? { ...x, use: e.target.checked } : x))} />
+                                <div className="study-fileinfo">
+                                    <div className="study-filename" title={it.name}>{it.name}</div>
+                                    <div className="study-filemeta">
+                                        {it.status === 'reading' && 'Reading…'}
+                                        {it.status === 'ready' && `${fmtBytes(it.size)} · ${it.text.length.toLocaleString()} characters`}
+                                        {it.status === 'error' && <span className="study-fileerr">{it.error}</span>}
+                                    </div>
+                                </div>
+                                <button type="button" className="study-fileremove" aria-label={`Remove ${it.name}`}
+                                        onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))}>&times;</button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                <div className="study-dialog-foot">
+                    <div className={`study-dialog-count ${willTrim ? 'is-over' : ''}`}>
+                        {chosen.length === 0
+                            ? 'No files selected yet'
+                            : willTrim
+                                ? `${total.toLocaleString()} characters selected. Only the first ${room.toLocaleString()} fit in the notes box.`
+                                : `${total.toLocaleString()} of ${room.toLocaleString()} characters`}
+                    </div>
+                    <div className="study-dialog-actions">
+                        <button type="button" className="study-dialog-cancel" onClick={onClose}>Cancel</button>
+                        <button type="button" className="study-dialog-add" disabled={chosen.length === 0 || reading || room === 0} onClick={confirm}>
+                            Add to notes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
     );
 };
 
@@ -91,6 +214,7 @@ const StudyPanel = ({ currentUser, apiBase = '', isOpen: isOpenProp, onOpenChang
     const [cardCount, setCardCount]   = useState(8);
     const [generating, setGenerating] = useState(false);
     const [genError, setGenError]     = useState('');
+    const [filesOpen, setFilesOpen]   = useState(false);   // the Add study files pop-up
 
     // ── Study mode ────────────────────────────────────────────────────────────
     const [activeSet, setActiveSet]   = useState(null); // { set, cards }
@@ -494,18 +618,34 @@ const StudyPanel = ({ currentUser, apiBase = '', isOpen: isOpenProp, onOpenChang
 
                     <div className="study-form-group">
                         <label className="study-label">
-                            Paste Your Notes / Lecture Content
+                            Your Notes / Lecture Content
                             <span className="study-char-count">{inputText.length}/8000</span>
                         </label>
+                        <button type="button" className="study-addfiles-btn" onClick={() => setFilesOpen(true)}>
+                            <StudyIcon name="paperclip" size={15} /> Add files (PDF, Word, PowerPoint, text)
+                        </button>
                         <textarea
                             className="study-textarea"
-                            placeholder="Paste your lecture notes, textbook sections, or any study material here…"
+                            placeholder="Add files above, or paste your lecture notes and textbook sections here…"
                             value={inputText}
                             onChange={e => setInputText(e.target.value)}
                             maxLength={8000}
                             rows={8}
                         />
                     </div>
+
+                    {filesOpen && (
+                        <AddFilesDialog
+                            existingLength={inputText.length}
+                            onClose={() => setFilesOpen(false)}
+                            onAdd={(text, info) => {
+                                setInputText(prev => (prev ? prev + '\n\n' : '') + text);
+                                setFilesOpen(false);
+                                setGenError('');
+                                showToast(info.trimmed ? 'Files added. Some text was trimmed to fit.' : `${info.files} file${info.files === 1 ? '' : 's'} added to your notes.`);
+                            }}
+                        />
+                    )}
 
                     <div className="study-form-group">
                         <label className="study-label">

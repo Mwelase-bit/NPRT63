@@ -18,6 +18,15 @@ const generateToken = (user) =>
         { expiresIn: '30d' }  // Extended to 30 days so users stay logged in longer
     );
 
+// Usage analytics must never block a sign-in, so failures are swallowed.
+const recordLogin = async (userId, kind) => {
+    try {
+        await pool.query('INSERT INTO login_events (user_id, kind) VALUES ($1, $2)', [userId, kind]);
+    } catch (err) {
+        console.warn('Could not record login event:', err.message);
+    }
+};
+
 const safeUser = (u) => {
     const { password, ...rest } = u;
     return rest;
@@ -71,6 +80,7 @@ router.post(
 
             const user = result.rows[0];
             const token = generateToken(user);
+            await recordLogin(user.id, 'login');
 
             res.status(201).json({
                 message: 'Registration successful! Welcome to BUILDHAUS.',
@@ -108,6 +118,7 @@ router.post(
             }
 
             const token = generateToken(user);
+            await recordLogin(user.id, 'login');
 
             // Fetch owned items
             const ownedResult = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [user.id]);

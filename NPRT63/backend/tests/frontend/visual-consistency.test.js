@@ -73,7 +73,8 @@ describe('Time / number sliders', () => {
                 assert.match(tag, /className="[^"]*\bapp-slider\b/, `${f}: range input without app-slider`);
             }
         }
-        assert.ok(count >= 2, `expected the Focus and Study sliders, found ${count}`);
+        // The Focus timer now uses typed hours/minutes; only the Study AI card-count slider remains
+        assert.ok(count >= 1, `expected the Study slider, found ${count}`);
     });
 
     test('.app-slider draws a 4px track with a transparent, non-thick input box', () => {

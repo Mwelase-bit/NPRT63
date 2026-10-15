@@ -1,5 +1,5 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, onDemolish }) => {
+const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, onDemolish, collapseSignal = 0 }) => {
     const sceneRef = useRef();
     // Latest onDemolish callback, readable from the long-lived event handlers
     const onDemolishRef = useRef(onDemolish);
@@ -11,77 +11,12 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
     
     const setupScene = ({ scene, camera, renderer }) => {
         console.log('Setting up 3D scene...');
-        sceneRef.current = { scene, camera, renderer }; window.__dbgScene = scene; window.__dbgCam = camera; // DEBUG-TMP
+        sceneRef.current = { scene, camera, renderer };
         
         try {
-            // Enhanced lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
-        scene.add(ambientLight);
-        scene.add(new THREE.HemisphereLight(0xdff1ff, 0x6b8f5a, 0.55));
-        
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.6);
-            directionalLight.position.set(15, 20, 10);
-        directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 1024;
-            directionalLight.shadow.mapSize.height = 1024;
-            directionalLight.shadow.camera.near = 0.5;
-            directionalLight.shadow.camera.far = 50;
-            directionalLight.shadow.camera.left = -20;
-            directionalLight.shadow.camera.right = 20;
-            directionalLight.shadow.camera.top = 20;
-            directionalLight.shadow.camera.bottom = -20;
-        scene.add(directionalLight);
-        
-            const pointLight = new THREE.PointLight(0xffd700, 0.8, 30);
-            pointLight.position.set(0, 8, 0);
-        scene.add(pointLight);
-        
-            // Beautiful sky gradient background
-            const skyGeometry = new THREE.SphereGeometry(450, 32, 32);
-            const skyMaterial = new THREE.ShaderMaterial({
-                uniforms: {
-                    topColor: { value: new THREE.Color(0x87CEEB) },
-                    bottomColor: { value: new THREE.Color(0xdff3e3) },
-                    offset: { value: 150 },
-                    exponent: { value: 0.6 }
-                },
-                vertexShader: `
-                    varying vec3 vWorldPosition;
-                    void main() {
-                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-                        vWorldPosition = worldPosition.xyz;
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `,
-                fragmentShader: `
-                    uniform vec3 topColor;
-                    uniform vec3 bottomColor;
-                    uniform float offset;
-                    uniform float exponent;
-                    varying vec3 vWorldPosition;
-                    void main() {
-                        float h = normalize(vWorldPosition + offset).y;
-                        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
-                    }
-                `,
-                side: THREE.BackSide
-            });
-            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-            scene.add(sky);
+            // Shared look: filmic lighting, sun shadows, sky dome and ground
+            SceneRig.setup(scene);
             
-            // Enhanced ground with texture
-            const groundGeometry = new THREE.PlaneGeometry(50, 50, 32, 32);
-            const groundMaterial = new THREE.MeshLambertMaterial({ 
-                color: 0x4a9c59,
-                transparent: true,
-                opacity: 0.9
-            });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -0.1;
-            ground.receiveShadow = true;
-        scene.add(ground);
-        
             const legacy = [];
             const trackLegacy = (fn) => { const n = scene.children.length; fn(); for (let i = n; i < scene.children.length; i++) legacy.push(scene.children[i]); };
             
@@ -102,9 +37,8 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
             trackLegacy(() => createVillageBackground(scene));
             // The new per-building surroundings replace the generic yard, fence and roads
             const villageGroups = new Set(scene.userData.villageHouses || []);
-            legacy.forEach(o => { if (!villageGroups.has(o) && !o.isLight) o.visible = false; });
+            legacy.forEach(o => { if (!villageGroups.has(o)) o.visible = false; });   // incl. the old lights: the shared rig supplies lighting
             
-            syncCommunity(scene, gameStateRef.current.completedHouses || []);
             console.log('3D scene setup complete');
         } catch (error) {
             console.error('Error setting up 3D scene:', error);
@@ -118,97 +52,6 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         }
     };
     
-    // ─── Community ────────────────────────────────────────────────────────
-    // Every finished session leaves its building behind. They are laid out on
-    // rings around the central plot; a bigger/longer session = a bigger building.
-    const RING_RADII = [44, 66, 88, 110, 132];
-    const RING_CAPACITY = [8, 12, 16, 20, 24];
-    const communitySlot = (i) => {
-        let k = 0, left = i;
-        while (k < RING_CAPACITY.length - 1 && left >= RING_CAPACITY[k]) { left -= RING_CAPACITY[k]; k++; }
-        const a = (left / RING_CAPACITY[k]) * Math.PI * 2 + k * 0.35 + 0.4;
-        return { x: Math.cos(a) * RING_RADII[k], z: Math.sin(a) * RING_RADII[k], ring: k };
-    };
-
-    const syncCommunity = (scene, list) => {
-        if (!scene || !window.BuildingFactory) return;
-        let com = scene.userData.community;
-        if (!com) {
-            com = new THREE.Group();
-            const grass = new THREE.Mesh(new THREE.CircleGeometry(170, 64), new THREE.MeshLambertMaterial({ color: 0x6fbf5a }));
-            grass.rotation.x = -Math.PI / 2;
-            grass.position.y = -0.05;
-            grass.receiveShadow = true;
-            com.add(grass);
-            scene.add(com);
-            scene.userData.community = com;
-            scene.userData.communityHouses = [];
-            scene.userData.communityRings = 0;
-        }
-        const houses = scene.userData.communityHouses;
-        for (let i = houses.length; i < list.length; i++) {
-            const slot = communitySlot(i);
-            const grp = new THREE.Group();
-            window.BuildingFactory.createBuilding(list[i].type, grp);
-            const box = new THREE.Box3().setFromObject(grp);
-            const size = box.getSize(new THREE.Vector3());
-            const fit = Math.min(1, 13 / Math.max(size.x, size.z, 0.01));
-            grp.scale.setScalar(fit);
-            grp.position.set(slot.x, 0, slot.z);
-            grp.rotation.y = Math.atan2(-slot.x, -slot.z);
-            grp.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-            com.add(grp);
-            houses.push(grp);
-            // road ring + a few trees when a new ring is first used
-            while (scene.userData.communityRings <= slot.ring) {
-                const r = RING_RADII[scene.userData.communityRings];
-                const road = new THREE.Mesh(new THREE.RingGeometry(r - 11, r - 8, 72), new THREE.MeshLambertMaterial({ color: 0x5b6068 }));
-                road.rotation.x = -Math.PI / 2;
-                road.position.y = 0.03;
-                com.add(road);
-                const lane = new THREE.Mesh(new THREE.RingGeometry(r - 9.6, r - 9.4, 72), new THREE.MeshBasicMaterial({ color: 0xf2e6a0 }));
-                lane.rotation.x = -Math.PI / 2;
-                lane.position.y = 0.04;
-                com.add(lane);
-                for (let t = 0; t < 14; t++) {
-                    const a = Math.random() * Math.PI * 2, rr = r + (Math.random() - 0.5) * 14;
-                    const tree = new THREE.Group();
-                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 1.6, 6), new THREE.MeshLambertMaterial({ color: 0x7a5230 }));
-                    trunk.position.y = 0.8;
-                    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3 + Math.random() * 0.6, 0), new THREE.MeshLambertMaterial({ color: 0x2f8f46 }));
-                    crown.position.y = 2.4;
-                    tree.add(trunk, crown);
-                    tree.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr);
-                    com.add(tree);
-                }
-                scene.userData.communityRings++;
-            }
-        }
-        const rings = Math.max(0, scene.userData.communityRings - 1);
-        scene.userData.communityRadius = list.length ? RING_RADII[rings] + 8 : 0;
-        placeBackdrop(scene);
-    };
-
-    // Far-off backdrop pieces of the environment (mountains, distant hills) are
-    // pushed out past the community so they never sit on top of it.
-    const placeBackdrop = (scene) => {
-        const env = scene.userData.environment;
-        if (!env) return;
-        const R = scene.userData.communityRadius || 0;
-        env.group.children.forEach(o => {
-            if (!o.userData.basePos) {
-                const d = Math.hypot(o.position.x, o.position.z);
-                if (d < 33) return;
-                o.userData.basePos = o.position.clone();
-                o.userData.baseScale = o.scale.clone();
-                o.userData.baseDist = d;
-            }
-            const f = R ? Math.max(1, (R + 22) / o.userData.baseDist) : 1;
-            o.position.set(o.userData.basePos.x * f, o.userData.basePos.y * Math.sqrt(f), o.userData.basePos.z * f);
-            o.scale.copy(o.userData.baseScale).multiplyScalar(Math.sqrt(f));
-        });
-    };
-
     const createConstructionSite = (scene) => {
         // Construction site fence
         const fenceMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
@@ -459,7 +302,7 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         scene.add(site.group);
         scene.userData.environment = env;
         scene.userData.site = site;
-        placeBackdrop(scene);
+        SceneRig.setGround(scene, env.ground);
         
         // Crew positions and walking route follow the building footprint
         const { hw, hd } = site.size;
@@ -2400,38 +2243,16 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
             // Check for building state changes
             checkBuildingState();
             
-            // Close-up while a session runs / just finished; wide view of the whole community otherwise
+            // Orbit around the building, pulled back far enough to show the whole surroundings
             const view = scene.userData.buildingView || { scale: 1, lookY: 4 };
             const fit = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.8 : 1;
             const zoomOut = 1.3;
-            const near = {
-                r: 20 * view.scale * fit * zoomOut,
-                h: 12 * view.scale * fit * (view.h || 1) * zoomOut,
-                look: view.lookY
-            };
-            const tm0 = timerRef.current || {};
-            const gs0 = gameStateRef.current || {};
-            const houses0 = gs0.completedHouses || [];
-            const closeUp = (tm0.isActive && tm0.duration > 0) || tm0.isCompleted || houses0.length === 0;
-            const span = (scene.userData.communityRadius || 0) + 6;
-            const far = { r: Math.max(near.r, span * 1.45 * fit), h: Math.max(near.h, span * 2.2 * fit), look: 0 };
-            const goal = closeUp ? near : far;
-            const cs = scene.userData.camSmooth || (scene.userData.camSmooth = { r: goal.r, h: goal.h, look: goal.look });
-            cs.r += (goal.r - cs.r) * 0.04;
-            cs.h += (goal.h - cs.h) * 0.04;
-            cs.look += (goal.look - cs.look) * 0.04;
-            camera.position.x = Math.cos(time) * cs.r;
-            camera.position.y = cs.h + Math.sin(time * 0.5) * 2;
-            camera.position.z = Math.sin(time) * cs.r;
-            camera.lookAt(0, cs.look, 0);
-
-            // The last finished building is shown on the central plot, so hide its
-            // twin in the community ring until a new session starts.
-            if (scene.userData.communityHouses) {
-                const centerShowsLast = !(tm0.isActive && tm0.duration > 0) && !gs0.isBuilding && gs0.buildStage >= 4 && houses0.length > 0;
-                const showCount = houses0.length - (centerShowsLast ? 1 : 0);
-                scene.userData.communityHouses.forEach((h, i) => { h.visible = i < showCount; });
-            }
+            const radius = 20 * view.scale * fit * zoomOut;
+            const height = 12 * view.scale * fit * (view.h || 1) * zoomOut;
+            camera.position.x = Math.cos(time) * radius;
+            camera.position.y = height + Math.sin(time * 0.5) * 2;
+            camera.position.z = Math.sin(time) * radius;
+            camera.lookAt(0, view.lookY, 0);
 
             // Animate the crew around the construction site
             if (scene.userData.workerGroup && scene.userData.workerMovement) {
@@ -2561,12 +2382,19 @@ const GameScene = ({ gameState, timer, interruptionDetected, housesBuilt = 0, on
         updateVillageVisibility(scene, 0);
     }, [housesBuilt]);
 
-    // New finished session -> add its building to the community
-    const communityList = gameState.completedHouses || [];
+    // The student left the app for too long: play the collapse as soon as the page is visible again
     useEffect(() => {
-        if (!sceneRef.current) return;
-        syncCommunity(sceneRef.current.scene, communityList);
-    }, [communityList.length]);
+        if (!collapseSignal || !sceneRef.current) return;
+        const { scene } = sceneRef.current;
+        if (document.visibilityState !== 'hidden') { destroyHouse(scene); return; }
+        const onShow = () => {
+            if (document.visibilityState === 'hidden') return;
+            document.removeEventListener('visibilitychange', onShow);
+            destroyHouse(scene);
+        };
+        document.addEventListener('visibilitychange', onShow);
+        return () => document.removeEventListener('visibilitychange', onShow);
+    }, [collapseSignal]);
 
     return React.createElement(window.ThreeCanvas, {
         camera: { position: [20, 15, 20], fov: 45 },
