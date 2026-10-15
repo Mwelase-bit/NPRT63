@@ -29,9 +29,9 @@ describe('Study logo is a single shared component', () => {
         assert.match(panel, /window\.StudyLogo\s*=\s*StudyLogo/);
     });
 
-    test('the pixel-house SVG artwork exists in exactly one place in the codebase', () => {
+    test('the house logo artwork exists in exactly one place in the codebase', () => {
         const files = ['src/App.jsx', 'src/components/UI/StudyPanel.jsx', 'src/components/GameScene.jsx'];
-        const copies = files.reduce((n, f) => n + (read(f).match(/fill="#b33a3a"/g) || []).length, 0);
+        const copies = files.reduce((n, f) => n + (read(f).match(/id="studyLogoGrad"/g) || []).length, 0);
         assert.equal(copies, 1, `found ${copies} copies of the logo artwork`);
     });
 

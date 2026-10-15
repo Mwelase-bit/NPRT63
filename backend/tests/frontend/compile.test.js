@@ -62,7 +62,7 @@ describe('index.html script manifest', () => {
 
     test('changed assets carry a cache-busting version newer than the stale 20260617/19 builds', () => {
         // Browsers were serving stale copies of these files, so a fix in them never reached users.
-        for (const f of ['src/App.jsx', 'src/utils/sounds.js', 'src/components/UI/StudyPanel.jsx', 'src/components/GameScene.jsx']) {
+        for (const f of ['src/App.jsx', 'src/utils/sounds.js', 'src/components/UI/StudyPanel.jsx', 'src/components/UI/AnalyticsPanel.jsx', 'src/components/UI/SocialPanel.jsx', 'src/components/GameScene.jsx']) {
             const s = scriptSrcs.find(x => x.src === f);
             assert.ok(s && s.version && s.version > '20260619z', `${f} version is ${s && s.version}`);
         }

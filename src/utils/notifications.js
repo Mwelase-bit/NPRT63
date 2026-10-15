@@ -57,6 +57,14 @@ const NotificationManager = (() => {
             });
         },
 
+        leaveWarning(seconds) {
+            send('Come back to BUILDHAUS', {
+                body: `Return within ${seconds} seconds or your building will collapse.`,
+                tag: 'leave-warning',
+                requireInteraction: true,
+            });
+        },
+
         sessionInterrupted() {
             send('Session Interrupted', {
                 body: 'Your building was demolished. Stay focused next time!',

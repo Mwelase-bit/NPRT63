@@ -30,11 +30,38 @@
     const B = (g, w, h, d, x, y, z, mt, ry) => put(g, new T.BoxGeometry(w, h, d), mt, x, y, z, ry);
     const C = (g, rt, rb, h, seg, x, y, z, mt) => put(g, new T.CylinderGeometry(rt, rb, h, seg), mt, x, y, z);
 
-    function disc(g, r, color, y, rough) {
+    // Subtle speckle so big flat grounds (grass, sand, snow) read as surfaces, not plain colour
+    const noiseCache = {};
+    function noiseTex(strength) {
+        if (!noiseCache[strength]) {
+            const S = 256, cv = document.createElement('canvas');
+            cv.width = cv.height = S;
+            const c = cv.getContext('2d');
+            c.fillStyle = '#fff'; c.fillRect(0, 0, S, S);
+            for (let i = 0; i < 5200; i++) {
+                const v = Math.round(255 * (1 - Math.random() * strength));
+                c.fillStyle = `rgb(${v},${v},${v})`;
+                const w = 1 + Math.random() * 4;
+                c.fillRect(Math.random() * S, Math.random() * S, w, w * (0.6 + Math.random()));
+            }
+            const t = new T.CanvasTexture(cv);
+            t.wrapS = t.wrapT = T.RepeatWrapping;
+            if (T.SRGBColorSpace) t.colorSpace = T.SRGBColorSpace;
+            noiseCache[strength] = t;
+        }
+        return noiseCache[strength];
+    }
+    function disc(g, r, color, y, rough, speckle) {
         const m = new T.Mesh(new T.CircleGeometry(r, 64), std(color, rough === undefined ? 1 : rough));
         m.rotation.x = -Math.PI / 2;
         m.position.y = y;
         m.receiveShadow = true;
+        if (speckle) {
+            const t = noiseTex(speckle).clone();
+            t.needsUpdate = true;
+            t.repeat.set(r / 5, r / 5);
+            m.material.map = t;
+        }
         g.add(m);
         return m;
     }
@@ -139,8 +166,12 @@
         const mat = (rx, ry) => h0.mat(color || 0xffffff, { map: kind, rx: rx, ry: ry, rough: kind === 'glass' ? 0.2 : 0.9, metal: kind === 'glass' ? 0.5 : 0.02 });
         B(grp, w, h, d, 0, h / 2, 0, mat(Math.max(1, Math.round(w)), Math.max(1, Math.round(h / 1.4))));
         B(grp, w + 0.3, 0.3, d + 0.3, 0, h + 0.15, 0, std(0x4a4a4f));
-        if (h > 6) { B(grp, w * 0.4, 0.8, d * 0.4, 0, h + 0.7, 0, std(0x777c82)); }
-        if (h > 9) { C(grp, 0.03, 0.05, 1.8, 5, w * 0.2, h + 1.2, d * 0.2, std(0xaaaaaa, 0.4, 0.8)); }
+        if (h > 8) {                                                       // stepped crown
+            B(grp, w * 0.72, h * 0.22, d * 0.72, 0, h + 0.3 + h * 0.11, 0, mat(Math.max(1, Math.round(w * 0.7)), 2));
+            B(grp, w * 0.72 + 0.3, 0.25, d * 0.72 + 0.3, 0, h + 0.3 + h * 0.22 + 0.12, 0, std(0x4a4a4f));
+        }
+        if (h > 6) { B(grp, w * 0.4, 0.8, d * 0.4, 0, h + 0.7 + (h > 8 ? h * 0.22 : 0), 0, std(0x777c82)); }
+        if (h > 9) { C(grp, 0.03, 0.05, 1.8, 5, w * 0.2, h + 1.2 + h * 0.22, d * 0.2, std(0xaaaaaa, 0.4, 0.8)); }
         return grp;
     }
     function rowHouse(g, x, z, ry, color, roofColor, kind) {
@@ -230,12 +261,12 @@
 
     // 1. Forest clearing around the log cabin
     ENV.hut = (g, rand, anim) => {
-        disc(g, 30, 0x3f7a3f, 0.01);
+        disc(g, 30, 0x3f7a3f, 0.01, 1, 0.14);
         disc(g, 8.5, 0x7a6a45, 0.02);                                       // clearing
         flatBox(g, 1.4, 9, 0, 9.5, 0x8a7550, 0.035);                            // dirt trail
         for (let i = 0; i < 70; i++) {
             const a = rand() * Math.PI * 2, r = 9.5 + rand() * 16;
-            tree(g, Math.cos(a) * r, Math.sin(a) * r, 0.9 + rand() * 0.9, 'pine');
+            tree(g, Math.cos(a) * r, Math.sin(a) * r, 0.75 + rand() * 0.75, 'pine');
         }
         // pond
         disc(g, 3.2, 0x3b8fc4, 0.045, 0.1).position.set(-8.5, 0.045, -4);
@@ -255,7 +286,7 @@
 
     // 2. Countryside farm around the cottage
     ENV.cottage = (g, rand, anim) => {
-        disc(g, 30, 0x78c25a, 0.01);
+        disc(g, 30, 0x78c25a, 0.01, 1, 0.16);
         flatBox(g, 1.8, 16, 0, 12, 0xb79a6a, 0.04);                             // lane
         // crop fields
         [[-13, -3, 0xe8c547], [-13, 6, 0x86b84a], [13, -5, 0x86b84a]].forEach(f => {
@@ -285,7 +316,7 @@
 
     // 3. Suburban/urban street around the townhouse
     ENV.townhouse = (g, rand, anim) => {
-        disc(g, 30, 0x5c9b4d, 0.01);
+        disc(g, 30, 0x5c9b4d, 0.01, 1, 0.16);
         disc(g, 30, 0x808389, 0.015, 0.95);
         // main street in front (+Z) and side street
         road(g, 0, 12, 60, 5.2, 0, true);
@@ -313,8 +344,8 @@
 
     // 4. Tropical beach resort around the villa
     ENV.villa = (g, rand, anim) => {
-        disc(g, 30, 0xe9d9a8, 0.01);
-        disc(g, 12, 0x5aae56, 0.02);                                              // garden lawn
+        disc(g, 30, 0xe9d9a8, 0.01, 1, 0.14);
+        disc(g, 12, 0x5aae56, 0.02, 1, 0.16);                                              // garden lawn
         const sea = new T.Mesh(new T.PlaneGeometry(70, 26), std(0x2aa6d6, 0.1, 0.3)); sea.rotation.x = -Math.PI / 2; sea.position.set(0, 0.03, -29); g.add(sea);
         const surf = new T.Mesh(new T.PlaneGeometry(70, 1.0), std(0xffffff, 0.3)); surf.rotation.x = -Math.PI / 2; surf.position.set(0, 0.045, -16.3); g.add(surf);
         // palms, umbrellas, loungers
@@ -333,7 +364,7 @@
 
     // 5. Formal estate with gates, hedges and long driveway around the mansion
     ENV.mansion = (g, rand, anim) => {
-        disc(g, 30, 0x4ea04f, 0.01);
+        disc(g, 30, 0x4ea04f, 0.01, 1, 0.16);
         for (let i = 0; i < 12; i++) flatBox(g, 60, 1.2, 0, -26 + i * 4.6, i % 2 ? 0x4aa04a : 0x56ab56, 0.015);      // mown stripes
         // driveway loop
         flatBox(g, 3.4, 16, 0, 14, 0xcbbf9c, 0.04);
@@ -354,37 +385,89 @@
         cloud(g, -8, 18, -16, 1.8); cloud(g, 12, 21, -18, 1.5);
     };
 
-    // 6. Rocky coast with sea, waves, ships and gulls around the lighthouse
-    ENV.lighthouse = (g, rand, anim) => {
-        disc(g, 34, 0x1f7fb8, 0.01, 0.15).material.metalness = 0.25;
-        disc(g, 7.8, 0xe3d3a1, 0.03);                                               // sandy island
-        disc(g, 6.2, 0x62a85a, 0.04);
-        const rings = [];
-        for (let i = 0; i < 5; i++) {
-            const r = ring(g, 9 + i * 3.2, 9.35 + i * 3.2, 0xffffff, 0.06);
-            r.material.transparent = true; rings.push(r);
+    // 6. Snowy alpine valley around the chalet
+    const snowMats = { pine: lam(0x24683a), pine2: lam(0x1c5a31), cap: lam(0xf6f9fc), snow: lam(0xf4f8fb), trunk: lam(0x5b3d26) };
+    const snowGeo = { cone: new T.ConeGeometry(1, 1.1, 8), capCone: new T.ConeGeometry(0.8, 0.6, 8), trunk: new T.CylinderGeometry(0.14, 0.2, 1.2, 6) };
+    function snowTree(g, x, z, s) {
+        const grp = new T.Group();
+        grp.position.set(x, 0, z);
+        const t = new T.Mesh(snowGeo.trunk, snowMats.trunk); t.position.y = 0.6 * s; t.scale.set(s, s, s); t.castShadow = true; grp.add(t);
+        for (let i = 0; i < 4; i++) {
+            const k = 1.1 - i * 0.22, y = (1.2 + i * 0.75) * s;
+            const c = new T.Mesh(snowGeo.cone, i % 2 ? snowMats.pine2 : snowMats.pine);
+            c.position.y = y; c.scale.set(k * s, s, k * s); c.castShadow = true; grp.add(c);
+            const cap = new T.Mesh(snowGeo.capCone, snowMats.cap);
+            cap.position.y = y + 0.22 * s; cap.scale.set(k * s, s * 0.85, k * s); grp.add(cap);
         }
-        anim.push((t) => wavesAnim(rings, t));
-        for (let i = 0; i < 14; i++) { const a = rand() * 6.28, r = 9 + rand() * 6; rock(g, Math.cos(a) * r, Math.sin(a) * r, 0.5 + rand() * 0.8, 0x6f6f6a); }
-        // buoys
-        [[-9, 8], [10, 9], [-11, -6]].forEach((p, i) => { C(g, 0.28, 0.35, 0.8, 8, p[0], 0.4, p[1], std(i % 2 ? 0xe74c3c : 0xf1c40f, 0.5)); });
-        // ships on the horizon
-        const ship = new T.Group(); g.add(ship);
-        B(ship, 5, 1.0, 1.6, 0, 0.5, 0, std(0x34495e, 0.5)); B(ship, 2, 1.0, 1.4, -0.8, 1.5, 0, std(0xffffff, 0.5)); C(ship, 0.25, 0.25, 1.2, 8, -1, 2.5, 0, std(0xe74c3c, 0.5));
-        for (let i = 0; i < 5; i++) B(ship, 0.8, 0.7, 1.2, 1.2 + (i % 2) * 0.5 - 0.3, 1.35, -0.2 + (i - 2) * 0.01, std([0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0xe67e22][i], 0.6));
-        ship.position.set(-20, 0, -18); ship.rotation.y = 0.3;
-        const sail = new T.Group(); g.add(sail); boat(sail, 0, 0, 0, 0xffffff); sail.position.set(16, 0, 14);
-        anim.push((t) => { ship.position.x = -20 + Math.sin(t * 0.05) * 12; sail.position.y = Math.sin(t * 1.1) * 0.09; sail.rotation.z = Math.sin(t) * 0.04; });
-        // gulls circling
-        const gulls = new T.Group(); g.add(gulls);
-        for (let i = 0; i < 6; i++) { const gl = new T.Group(); [-1, 1].forEach(s => { const w = B(gl, 0.7, 0.04, 0.22, s * 0.35, 0, 0, std(0xffffff, 0.8)); w.rotation.z = s * 0.25; }); B(gl, 0.18, 0.14, 0.4, 0, 0, 0, std(0xffffff, 0.8)); gl.userData.phase = i * 1.05; gl.userData.r = 7 + (i % 3) * 2.2; gl.userData.y = 9 + (i % 2) * 1.8; gulls.add(gl); }
-        anim.push((t) => gulls.children.forEach((gl) => { const a = t * 0.35 + gl.userData.phase; gl.position.set(Math.cos(a) * gl.userData.r, gl.userData.y + Math.sin(t * 2 + gl.userData.phase) * 0.4, Math.sin(a) * gl.userData.r); gl.rotation.y = -a; gl.children[0].rotation.z = 0.25 + Math.sin(t * 8 + gl.userData.phase) * 0.35; gl.children[1].rotation.z = -0.25 - Math.sin(t * 8 + gl.userData.phase) * 0.35; }));
-        cloud(g, -12, 20, -20, 1.8); cloud(g, 8, 24, -24, 2.1); cloud(g, 20, 18, 4, 1.4);
+        g.add(grp);
+        return grp;
+    }
+    function snowman(g, x, z, ry) {
+        const grp = new T.Group(); grp.position.set(x, 0, z); grp.rotation.y = ry || 0; g.add(grp);
+        [[0.75, 0.75], [0.56, 1.75], [0.4, 2.55]].forEach(p => { const m = put(grp, new T.SphereGeometry(p[0], 14, 10), snowMats.snow, 0, p[1], 0); });
+        put(grp, new T.ConeGeometry(0.07, 0.45, 6), std(0xff7a1a, 0.6), 0, 2.55, 0.46).rotation.x = Math.PI / 2;
+        [-0.14, 0.14].forEach(dx => put(grp, new T.SphereGeometry(0.05, 6, 6), std(0x1a1a1a, 0.5), dx, 2.65, 0.36));
+        [0, 0.28, 0.56].forEach((dy, i) => put(grp, new T.SphereGeometry(0.06, 6, 6), std(0x1a1a1a, 0.5), 0, 1.95 - dy * 0.9 + (i ? 0 : 0.1), 0.52 - i * 0.04));
+        const scarf = put(grp, new T.TorusGeometry(0.42, 0.09, 8, 16), std(0xc0392b, 0.8), 0, 2.2, 0); scarf.rotation.x = Math.PI / 2;
+        put(grp, new T.CylinderGeometry(0.3, 0.3, 0.5, 12), std(0x2a2a2a, 0.7), 0, 3.1, 0);
+        put(grp, new T.CylinderGeometry(0.42, 0.42, 0.06, 12), std(0x2a2a2a, 0.7), 0, 2.86, 0);
+    }
+    function sled(g, x, z, ry) {
+        const grp = new T.Group(); grp.position.set(x, 0, z); grp.rotation.y = ry || 0; g.add(grp);
+        B(grp, 1.7, 0.1, 0.7, 0, 0.32, 0, std(0x9a6a3a, 0.9));
+        [-0.28, 0.28].forEach(dz => { B(grp, 1.9, 0.06, 0.07, 0, 0.12, dz, std(0x555a60, 0.4, 0.7)); [-0.6, 0.6].forEach(dx => B(grp, 0.06, 0.22, 0.06, dx, 0.22, dz, std(0x555a60, 0.4, 0.7))); });
+        [-0.5, 0, 0.5].forEach(dx => B(grp, 0.08, 0.04, 0.7, dx, 0.39, 0, std(0xb98a55, 0.9)));
+    }
+    ENV.chalet = (g, rand, anim) => {
+        disc(g, 30, 0xe8f0f7, 0.01, 0.95, 0.07);                                      // snow field
+        disc(g, 11, 0xffffff, 0.015, 0.95);                                     // untouched yard
+        // frozen pond with a rim of rocks
+        const pond = disc(g, 4.2, 0xa8d4ea, 0.03, 0.08); pond.position.set(-11, 0.03, 7); pond.material.metalness = 0.25;
+        for (let i = 0; i < 10; i++) { const a = i / 10 * 6.28; rock(g, -11 + Math.cos(a) * 4.5, 7 + Math.sin(a) * 4.5, 0.4 + rand() * 0.3, 0x8a8f94); }
+        // trodden path from the door
+        flatBox(g, 1.9, 12, 0, 9.5, 0xd6e2ec, 0.04);
+        for (let i = 0; i < 6; i++) B(g, 0.9, 0.03, 0.25, (rand() - 0.5) * 1.2, 0.07, 5 + i * 1.9, std(0xc2d3e0, 1));
+        // forest of snowy pines around the valley
+        for (let i = 0; i < 70; i++) {
+            const a = rand() * 6.28, r = 12 + rand() * 17;
+            const x = Math.cos(a) * r, z = Math.sin(a) * r;
+            if (Math.abs(x) < 2.6 && z > 0) continue;
+            if (Math.hypot(x + 11, z - 7) < 6.5) continue;
+            snowTree(g, x, z, 0.7 + rand() * 0.75);
+        }
+        // small drifts
+        for (let i = 0; i < 18; i++) {
+            const a = rand() * 6.28, r = 8 + rand() * 18;
+            const d = put(g, new T.SphereGeometry(0.8 + rand() * 1.1, 10, 6), snowMats.snow, Math.cos(a) * r, 0, Math.sin(a) * r);
+            d.scale.y = 0.35; d.castShadow = false;
+        }
+        // picket fence along the yard
+        for (let i = 0; i < 9; i++) { const x = 6 + i * 1.2; B(g, 0.14, 1.0, 0.14, x, 0.5, 10, std(0x8a6a45)); B(g, 0.2, 0.08, 0.2, x, 1.03, 10, std(0xf6f9fc, 1)); }
+        B(g, 10.4, 0.1, 0.07, 10.8, 0.85, 10, std(0x8a6a45)); B(g, 10.4, 0.1, 0.07, 10.8, 0.5, 10, std(0x8a6a45));
+        snowman(g, 7.5, 6.2, -0.5);
+        sled(g, -5.5, 8.2, 0.4);
+        mountains(g, 12, 41, rand, 0x7a8da0, true);
+        // gentle snowfall
+        const N = 520, pos = new Float32Array(N * 3), base = [];
+        for (let i = 0; i < N; i++) { base.push({ x: (rand() - 0.5) * 70, y: rand() * 26, z: (rand() - 0.5) * 70, s: 0.9 + rand() * 1.1, p: rand() * 6.28 }); }
+        const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+        const flakes = new T.Points(geo, new T.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.9, depthWrite: false }));
+        flakes.frustumCulled = false; g.add(flakes);
+        anim.push((t) => {
+            for (let i = 0; i < N; i++) {
+                const b = base[i];
+                pos[i * 3] = b.x + Math.sin(t * 0.6 + b.p) * 0.9;
+                pos[i * 3 + 1] = (((b.y - t * b.s) % 26) + 26) % 26;
+                pos[i * 3 + 2] = b.z + Math.cos(t * 0.5 + b.p) * 0.9;
+            }
+            geo.attributes.position.needsUpdate = true;
+        });
+        cloud(g, -12, 20, -18, 1.8); cloud(g, 10, 23, -24, 2.1);
     };
 
     // 7. Medieval kingdom: moat, market, tents, guards and forest around the castle
     ENV.castle = (g, rand, anim) => {
-        disc(g, 30, 0x5fa24e, 0.01);
+        disc(g, 30, 0x5fa24e, 0.01, 1, 0.18);
         const moat = ring(g, 6.7, 9.0, 0x2e86b8, 0.045); moat.material.roughness = 0.1;
         ring(g, 6.5, 6.7, 0x8e8e88, 0.05); ring(g, 9.0, 9.25, 0x8e8e88, 0.05);
         flatBox(g, 3.4, 12, 0, 15.5, 0xb59a6a, 0.04);                                   // road to the gate
@@ -406,7 +489,7 @@
 
     // 8. Downtown city around the skyscraper
     ENV.skyscraper = (g, rand, anim) => {
-        disc(g, 34, 0x3b3e43, 0.01, 0.95);
+        disc(g, 34, 0x3b3e43, 0.01, 0.95, 0.12);
         // road grid
         road(g, 0, 11.5, 70, 6, 0, true);
         road(g, 0, -11.5, 70, 6, 0, true);
@@ -419,7 +502,7 @@
         const cols = [0xffffff, 0xb5533c, 0xd8d2c4, 0xffffff];
         let n = 0;
         [[-20, 20], [-8.5, 21], [8.5, 21.5], [20, 20], [-21, 8], [21, 8], [-21, -8], [21, -8], [-20, -20], [-8.5, -21], [8.5, -21.5], [20, -20]].forEach((p, i) => {
-            tower(g, p[0], p[1], 5.5 + rand() * 1.5, 7 + rand() * 12, 5.5 + rand() * 1.5, kinds[i % 4], cols[i % 4]); n++;
+            tower(g, p[0], p[1], 5.5 + rand() * 1.5, 5 + rand() * 7, 5.5 + rand() * 1.5, kinds[i % 4], cols[i % 4]); n++;
         });
         // lights, signals, trees
         [[-6, 8.2], [6, 8.2], [-6, -8.2], [6, -8.2], [8.2, 6], [8.2, -6], [-8.2, 6], [-8.2, -6]].forEach(p => streetLamp(g, p[0], p[1], 0));
@@ -442,13 +525,15 @@
         cloud(g, -14, 28, -22, 2.2); cloud(g, 18, 31, -16, 2.6);
     };
 
+    // Colour of the ground beyond each environment's own disc, so the scene never ends in a hard edge
+    const GROUND = { hut: 0x3f7a3f, cottage: 0x78c25a, townhouse: 0x5c9b4d, villa: 0xe9d9a8, mansion: 0x4ea04f, chalet: 0xe8f0f7, castle: 0x5fa24e, skyscraper: 0x3b3e43 };
+
     function createEnvironment(type) {
         const g = new T.Group();
         const anim = [];
-        const seed = { hut: 11, cottage: 22, townhouse: 33, villa: 44, mansion: 55, lighthouse: 66, castle: 77, skyscraper: 88 }[type] || 5;
+        const seed = { hut: 11, cottage: 22, townhouse: 33, villa: 44, mansion: 55, chalet: 66, castle: 77, skyscraper: 88 }[type] || 5;
         (ENV[type] || ENV.cottage)(g, rngFor(seed), anim);
-        g.traverse(o => { if (o.isMesh) { o.matrixAutoUpdate = o.matrixAutoUpdate; } });
-        return { group: g, update: (t) => anim.forEach(f => f(t)) };
+        return { group: g, update: (t) => anim.forEach(f => f(t)), ground: GROUND[type] === undefined ? 0x78c25a : GROUND[type] };
     }
 
     // ── Construction site ────────────────────────────────────────────────

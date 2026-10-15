@@ -15,6 +15,8 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const shopRoutes = require('./routes/shop');
 const achievementRoutes = require('./routes/achievements');
 const aiRoutes          = require('./routes/ai');
+const analyticsRoutes   = require('./routes/analytics');
+const socialRoutes      = require('./routes/social');
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
 const { sanitiseBody, generalLimiter } = require('./middleware/validate');
@@ -54,6 +56,8 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/ai',           aiRoutes);
+app.use('/api/analytics',    analyticsRoutes);
+app.use('/api/social',       socialRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

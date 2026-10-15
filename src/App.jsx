@@ -10,6 +10,9 @@ const RewardPanel = window.RewardPanel;
 const ProfilePanel = window.ProfilePanel;
 const CommunityPanel = window.CommunityPanel;
 const ShopPanel = window.ShopPanel;
+const AnalyticsPanel = window.AnalyticsPanel;
+const SocialPanel = window.SocialPanel;
+const InviteDialog = window.InviteDialog;
 const GameScene = window.GameScene;
 const RegistrationModal = window.RegistrationModal;
 const StudyPanel = window.StudyPanel;
@@ -64,23 +67,26 @@ const App = () => {
         };
     }, [gameState.token]);
 
-    // Fresh device / cleared storage: rebuild the community from saved sessions
-    const communityRestoredRef = React.useRef(false);
+    // Usage analytics: count an app visit when a saved sign-in is restored, and
+    // report time spent in the app (only while the tab is visible) every 30 s.
     useEffect(() => {
-        if (!gameState.token || gameState.authRestoring || communityRestoredRef.current) return;
-        communityRestoredRef.current = true;
-        if ((gameState.completedHouses || []).length) return;
-        window.api.sessions.getHistory(100, 0).then(res => {
-            const houses = (res.sessions || [])
-                .filter(x => x.completed)
-                .reverse()
-                .map(x => ({
-                    type: window.BuildingTiers.tierFor(x.duration / 60).id,
-                    minutes: Math.round(x.duration / 60),
-                    completedAt: new Date(x.createdAt || x.created_at || Date.now()).getTime()
-                }));
-            gameState.restoreCommunity(houses);
-        }).catch(() => { });
+        if (!gameState.token || gameState.authRestoring) return;
+        window.api.analytics.visit().catch(() => { });
+        let last = Date.now();
+        const tick = () => {
+            const now = Date.now();
+            const secs = Math.round((now - last) / 1000);
+            last = now;
+            if (document.visibilityState !== 'visible' || secs < 1) return;
+            window.api.analytics.heartbeat(Math.min(secs, 120)).catch(() => { });
+        };
+        const onVisible = () => { if (document.visibilityState === 'visible') last = Date.now(); };
+        const timer = setInterval(tick, 30000);
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, [gameState.token, gameState.authRestoring]);
 
     // Force building to start when timer becomes active
@@ -92,7 +98,7 @@ const App = () => {
     }, [timer.isActive, gameState.isBuilding]);
 
     // The building rises with THIS session's progress (each session builds one
-    // building, sized by its length); finished buildings stay in the community.
+    // building, sized by its length); each finished building stays on screen after the session.
     useEffect(() => {
         if (timer.isActive && timer.duration > 0) {
             const progress = (timer.duration - timer.timeLeft) / timer.duration;
@@ -111,7 +117,7 @@ const App = () => {
         }
     }, [timer.timeLeft, timer.duration, timer.isActive, gameState.buildStage, gameState, rewards.totalFocusTime]);
 
-    // Handle timer completion: the finished building is saved to the community
+    // Handle timer completion: the finished building stays on screen
     // and stays on screen together with the user's progress.
     useEffect(() => {
         if (timer.isCompleted) {
@@ -160,8 +166,9 @@ const App = () => {
 
             // Sync interrupted session to backend
             // Whole seconds, never more than the planned duration (the API rejects both)
+            // Focused time only: the timer is paused while the student is away
             const elapsed = sessionStartRef.current
-                ? Math.min(timer.duration, Math.floor((Date.now() - sessionStartRef.current) / 1000))
+                ? Math.max(0, Math.min(timer.duration, timer.duration - timer.timeLeft))
                 : 0;
             syncSessionToBackend(timer.duration, elapsed, false);
             sessionStartRef.current = null;
@@ -175,20 +182,119 @@ const App = () => {
     // Track when a session started (for elapsed time calc on interruption)
     const sessionStartRef = React.useRef(null);
 
-    // Called by GameScene the moment a building starts collapsing.
-    // Plays the crash sound synchronously (still inside the user's click, so the
-    // AudioContext is allowed to start) and flags the interruption so the
-    // session is recorded as interrupted.
+    // ── Study rooms: a session started from a room reports its progress to it ──
+    const [activeRoom, setActiveRoom] = useState(null);       // { id, title }
+    const activeRoomRef = React.useRef(null);
+    activeRoomRef.current = activeRoom;
+    const postRoomStatus = useCallback((status) => {
+        const r = activeRoomRef.current;
+        if (r) window.api.social.roomStatus(r.id, status).catch(() => { });
+    }, []);
+
+    // ── Invite links and QR scans: /?invite=CODE ────────────────────────────
+    const [socialView, setSocialView] = useState(null);
+    const [inviteCode, setInviteCode] = useState(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('invite');
+            if (code) {
+                sessionStorage.setItem('bh_pending_invite', code);
+                params.delete('invite');
+                const qs = params.toString();
+                window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+            }
+        } catch (e) { /* storage or history unavailable */ }
+        return null;
+    });
+    useEffect(() => {
+        if (!gameState.token || gameState.authRestoring) return;
+        try {
+            const pending = sessionStorage.getItem('bh_pending_invite');
+            if (pending) { sessionStorage.removeItem('bh_pending_invite'); setInviteCode(pending); }
+        } catch (e) { /* ignore */ }
+    }, [gameState.token, gameState.authRestoring]);
+
+    // Called the moment a building starts collapsing (a click on the scene, or the
+    // student leaving the app for too long). Plays the crash sound and flags the
+    // interruption so the session is recorded as interrupted. Only the first call
+    // per session counts.
+    const demolishedRef = React.useRef(false);
     const handleDemolish = useCallback(() => {
+        if (demolishedRef.current) return;
+        demolishedRef.current = true;
         if (window.SoundManager) window.SoundManager.demolish();
         setInterruptionDetected(true);
+        postRoomStatus('interrupted');
     }, []);
+
+    // ── Leaving the app mid-session ─────────────────────────────────────
+    // Leaving the tab/app pauses the session and opens a 30 s return window.
+    // Back in time: carry on. Not back: the building collapses.
+    const [collapseSignal, setCollapseSignal] = useState(0);
+    const [leaveBanner, setLeaveBanner] = useState(null);   // { phase: 'away' | 'back', deadline }
+    const [leaveClock, setLeaveClock] = useState(0);
+    const timerRef = React.useRef(timer);
+    timerRef.current = timer;
+    const guardRef = React.useRef(null);
+
+    useEffect(() => {
+        const guard = window.LeaveGuard.create({
+            onAway: ({ deadline }) => {
+                timerRef.current.pause();
+                setLeaveBanner({ phase: 'away', deadline });
+                if (window.NotificationManager) window.NotificationManager.leaveWarning(Math.round(window.LeaveGuard.GRACE_MS / 1000));
+            },
+            onBack: ({ awayMs }) => {
+                timerRef.current.resume();
+                setLeaveBanner({ phase: 'back', awayMs });
+                setTimeout(() => setLeaveBanner(b => (b && b.phase === 'back' ? null : b)), 4000);
+            },
+            onExpire: () => {
+                setLeaveBanner(null);
+                try { sessionStorage.setItem('bh_collapsed_reason', 'left'); } catch (e) { }
+                handleDemolish();                       // record it right away, even if the tab is hidden
+                setCollapseSignal(n => n + 1);          // the scene plays the collapse as soon as it is visible
+            }
+        });
+        guardRef.current = guard;
+        window.LeaveGuard.register(guard);
+        const detach = window.LeaveGuard.attach(guard);
+        return () => { detach(); window.LeaveGuard.register(null); };
+    }, []);
+
+    // Detection runs only while a session is running
+    useEffect(() => {
+        if (guardRef.current) guardRef.current.setActive(timer.isActive && !timer.isCompleted);
+        if (!timer.isActive) setLeaveBanner(null);
+    }, [timer.isActive, timer.isCompleted]);
+
+    // Live countdown on the banner (visible when the window is only unfocused)
+    useEffect(() => {
+        if (!leaveBanner || leaveBanner.phase !== 'away') return;
+        const id = setInterval(() => setLeaveClock(Date.now()), 250);
+        return () => clearInterval(id);
+    }, [leaveBanner]);
+
+    // After a collapse caused by leaving, the page reloads; explain what happened
+    const [collapseNotice, setCollapseNotice] = useState(() => {
+        try {
+            const r = sessionStorage.getItem('bh_collapsed_reason');
+            if (r) sessionStorage.removeItem('bh_collapsed_reason');
+            return r === 'left';
+        } catch (e) { return false; }
+    });
+    useEffect(() => {
+        if (!collapseNotice) return;
+        const id = setTimeout(() => setCollapseNotice(false), 9000);
+        return () => clearTimeout(id);
+    }, [collapseNotice]);
 
     const startFocusSession = async (duration) => {
         console.log('Starting focus session with duration:', duration);
 
         // Record when session started (for elapsed-time tracking)
         sessionStartRef.current = Date.now();
+        demolishedRef.current = false;
 
         // Pick the building size from the session length, then reset
         gameState.setHouseForDuration(duration);
@@ -205,6 +311,29 @@ const App = () => {
 
         setInterruptionDetected(false);
     };
+
+    // Start my own timer for a study room's length and tell the room I am focusing
+    const startRoomSession = async (room) => {
+        const info = { id: room.id, title: room.title };
+        setActiveRoom(info);
+        activeRoomRef.current = info;
+        try {
+            if (room.myStatus && room.myStatus !== 'joined' && room.myStatus !== 'focusing') await window.api.social.roomStatus(room.id, 'joined');
+            await window.api.social.roomStatus(room.id, 'focusing');
+        } catch (e) { /* the session still runs; the room just will not show it */ }
+        setActivePanel('timer');
+        await startFocusSession(room.durationMin * 60);
+    };
+
+    // When a session ends, report how it went to the room it was started from
+    const wasActiveRef = React.useRef(false);
+    useEffect(() => {
+        if (wasActiveRef.current && !timer.isActive && activeRoomRef.current) {
+            postRoomStatus(timer.isCompleted ? 'completed' : 'interrupted');
+            setActiveRoom(null);
+        }
+        wasActiveRef.current = timer.isActive;
+    }, [timer.isActive, timer.isCompleted]);
 
     // POST a finished or interrupted session to the backend
     const syncSessionToBackend = async (duration, elapsed, completed) => {
@@ -265,6 +394,34 @@ const App = () => {
                 </div>
             )}
 
+            {inviteCode && gameState.token && (
+                <InviteDialog
+                    code={inviteCode}
+                    onClose={() => setInviteCode(null)}
+                    onDone={(v) => { setInviteCode(null); setSocialView(v); setActivePanel('social'); }}
+                />
+            )}
+
+            {/* Leaving the app mid-session: return window / welcome back / collapse notice */}
+            {leaveBanner && leaveBanner.phase === 'away' && (
+                <div className="leave-banner leave-banner--warn" role="alert">
+                    <strong>Come back to your session</strong>
+                    <span>Your building collapses in {Math.max(0, Math.ceil((leaveBanner.deadline - (leaveClock || Date.now())) / 1000))}s. The timer is paused.</span>
+                </div>
+            )}
+            {leaveBanner && leaveBanner.phase === 'back' && (
+                <div className="leave-banner leave-banner--ok" role="status">
+                    <strong>Welcome back</strong>
+                    <span>You were away {Math.round(leaveBanner.awayMs / 1000)}s. The timer was paused, so nothing was lost.</span>
+                </div>
+            )}
+            {collapseNotice && (
+                <div className="leave-banner leave-banner--bad" role="alert">
+                    <strong>Your building collapsed</strong>
+                    <span>You left the app for more than {Math.round(window.LeaveGuard.GRACE_MS / 1000)} seconds. Stay on the page to keep building.</span>
+                </div>
+            )}
+
             {/* Registration Modal — shown only when there is truly no active session */}
             {!gameState.authRestoring && !gameState.token && !gameState.backendOffline && (
                 <RegistrationModal gameState={gameState} />
@@ -289,6 +446,7 @@ const App = () => {
                         interruptionDetected={interruptionDetected}
                         housesBuilt={rewards.housesBuilt || 0}
                         onDemolish={handleDemolish}
+                        collapseSignal={collapseSignal}
                     />
                 </ErrorBoundary>
             </div>
@@ -345,6 +503,16 @@ const App = () => {
                             Community
                         </button>
                         <button
+                            className={`nav-tab ${activePanel === 'social' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('social');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="user-plus"></i>
+                            Friends
+                        </button>
+                        <button
                             className={`nav-tab ${activePanel === 'shop' ? 'active' : ''}`}
                             onClick={() => {
                                 setActivePanel('shop');
@@ -353,6 +521,16 @@ const App = () => {
                         >
                             <i data-feather="shopping-bag"></i>
                             Shop
+                        </button>
+                        <button
+                            className={`nav-tab ${activePanel === 'insights' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActivePanel('insights');
+                                setMobileMenuOpen(false);
+                            }}
+                        >
+                            <i data-feather="bar-chart-2"></i>
+                            Insights
                         </button>
                         <button
                             className={`nav-tab nav-tab-study ${studyOpen ? 'active' : ''}`}
@@ -374,6 +552,7 @@ const App = () => {
                                 timer={timer}
                                 onStartSession={startFocusSession}
                                 gameState={gameState}
+                                roomTitle={activeRoom ? activeRoom.title : null}
                             />
                         )}
 
@@ -394,6 +573,20 @@ const App = () => {
                                 rewards={rewards}
                                 faculty={faculty}
                             />
+                        )}
+
+                        {activePanel === 'social' && (
+                            <SocialPanel
+                                gameState={gameState}
+                                onStartRoom={startRoomSession}
+                                activeRoomId={activeRoom ? activeRoom.id : null}
+                                initialView={socialView}
+                                onViewConsumed={() => setSocialView(null)}
+                            />
+                        )}
+
+                        {activePanel === 'insights' && (
+                            <AnalyticsPanel gameState={gameState} />
                         )}
 
                         {activePanel === 'shop' && (
@@ -424,6 +617,7 @@ const App = () => {
                         timer={timer}
                         onStartSession={startFocusSession}
                         gameState={gameState}
+                        roomTitle={activeRoom ? activeRoom.title : null}
                     />
                 </div>
             )}

@@ -98,6 +98,51 @@ const api = {
             api._fetch('/shop/buy', { method: 'POST', body: JSON.stringify({ itemId }) })
     },
 
+    // ── Social: friends, class groups, shared study rooms ─────────────────────
+    social: {
+        me: () => api._fetch('/social/me'),
+        invite: (code) => api._fetch(`/social/invite/${encodeURIComponent(code)}`),
+        // friends
+        friends: () => api._fetch('/social/friends'),
+        requestFriend: (code) => api._fetch('/social/friends/request', { method: 'POST', body: JSON.stringify({ code }) }),
+        acceptFriend: (id) => api._fetch(`/social/friends/${id}/accept`, { method: 'POST', body: '{}' }),
+        declineFriend: (id) => api._fetch(`/social/friends/${id}/decline`, { method: 'POST', body: '{}' }),
+        removeFriend: (id) => api._fetch(`/social/friends/${id}`, { method: 'DELETE' }),
+        // groups
+        groups: () => api._fetch('/social/groups'),
+        group: (id) => api._fetch(`/social/groups/${id}`),
+        createGroup: (name) => api._fetch('/social/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+        joinGroup: (code) => api._fetch('/social/groups/join', { method: 'POST', body: JSON.stringify({ code }) }),
+        leaveGroup: (id) => api._fetch(`/social/groups/${id}/leave`, { method: 'POST', body: '{}' }),
+        resetGroupCode: (id) => api._fetch(`/social/groups/${id}/regenerate-code`, { method: 'POST', body: '{}' }),
+        removeGroupMember: (id, userId) => api._fetch(`/social/groups/${id}/members/${userId}`, { method: 'DELETE' }),
+        deleteGroup: (id) => api._fetch(`/social/groups/${id}`, { method: 'DELETE' }),
+        // study rooms
+        rooms: () => api._fetch('/social/rooms'),
+        room: (id) => api._fetch(`/social/rooms/${id}`),
+        createRoom: (body) => api._fetch('/social/rooms', { method: 'POST', body: JSON.stringify(body) }),
+        joinRoom: (code) => api._fetch('/social/rooms/join', { method: 'POST', body: JSON.stringify({ code }) }),
+        joinRoomById: (id) => api._fetch(`/social/rooms/${id}/join`, { method: 'POST', body: '{}' }),
+        roomStatus: (id, status) => api._fetch(`/social/rooms/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+        leaveRoom: (id) => api._fetch(`/social/rooms/${id}/leave`, { method: 'POST', body: '{}' }),
+        closeRoom: (id) => api._fetch(`/social/rooms/${id}/close`, { method: 'POST', body: '{}' })
+    },
+
+    // ── Analytics ─────────────────────────────────────────────────────────────
+    analytics: {
+        get: ({ from, to, tz } = {}) => {
+            const q = new URLSearchParams();
+            if (from) q.set('from', from);
+            if (to) q.set('to', to);
+            if (tz) q.set('tz', tz);
+            return api._fetch(`/analytics?${q.toString()}`);
+        },
+        heartbeat: (seconds) =>
+            api._fetch('/analytics/heartbeat', { method: 'POST', body: JSON.stringify({ seconds }) }),
+        visit: () =>
+            api._fetch('/analytics/visit', { method: 'POST', body: JSON.stringify({}) })
+    },
+
     // ── Achievements ──────────────────────────────────────────────────────────
     achievements: {
         getAll: () => api._fetch('/achievements'),
